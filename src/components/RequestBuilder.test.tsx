@@ -36,7 +36,7 @@ describe('RequestBuilder Component', () => {
     methods.forEach(method => {
       const request: HttpRequest = {
         ...mockRequest,
-        method: method as any,
+        method: method as HttpRequest['method'],
       };
       expect(request.method).toBe(method);
     });
@@ -73,7 +73,7 @@ describe('RequestBuilder Component', () => {
       const request: HttpRequest = {
         ...mockRequest,
         body: {
-          mode: mode as any,
+          mode: mode as Exclude<HttpRequest['body'], undefined>['mode'],
           content: mode === 'none' ? undefined : 'test content',
         },
       };

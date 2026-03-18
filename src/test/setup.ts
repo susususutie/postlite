@@ -94,7 +94,7 @@ document.createElement = vi.fn((tagName: string) => {
     appendChild: vi.fn(),
     removeChild: vi.fn(),
   };
-  return element as any;
+  return element as HTMLElement;
 });
 
 document.body.appendChild = vi.fn();

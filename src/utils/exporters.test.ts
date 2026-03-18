@@ -6,7 +6,7 @@ import {
   exportCollection,
   downloadFile,
 } from './exporters';
-import type { Collection, Folder, HttpRequest } from '../types';
+import type { Collection, HttpRequest } from '../types';
 
 describe('Exporters', () => {
   const mockRequest: HttpRequest = {
@@ -289,7 +289,7 @@ describe('Exporters', () => {
         ],
       };
 
-      const result = exportToSwagger(collectionWithoutLeadingSlash);
+      exportToSwagger(collectionWithoutLeadingSlash);
       // Should skip this request due to invalid URL parsing
     });
 
@@ -398,7 +398,7 @@ describe('Exporters', () => {
 
     it('should throw error for unsupported format', () => {
       expect(() => {
-        exportCollection(mockCollection, 'xml' as any);
+        exportCollection(mockCollection, 'xml' as unknown as 'postman' | 'swagger' | 'json');
       }).toThrow('Unsupported export format: xml');
     });
   });
@@ -425,7 +425,7 @@ describe('Exporters', () => {
         setAttribute: vi.fn(),
       };
 
-      vi.spyOn(document, 'createElement').mockReturnValue(linkElement as any);
+      vi.spyOn(document, 'createElement').mockReturnValue(linkElement as unknown as HTMLAnchorElement);
 
       downloadFile('content', 'my-file.json', 'application/json');
 

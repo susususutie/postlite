@@ -347,7 +347,6 @@ export function moveRequest(
   }
 
   // 找到源位置的请求
-  let request: HttpRequest | undefined;
   let sourceList: HttpRequest[];
 
   if (sourceFolderId) {
@@ -361,7 +360,7 @@ export function moveRequest(
   const requestIndex = sourceList.findIndex(r => r.id === requestId);
   if (requestIndex === -1) return false;
 
-  request = sourceList[requestIndex];
+  const request = sourceList[requestIndex];
   sourceList.splice(requestIndex, 1);
 
   // 添加到目标位置

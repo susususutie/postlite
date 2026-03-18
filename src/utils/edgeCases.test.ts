@@ -1,27 +1,15 @@
 // 边缘情况和错误处理测试
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { 
-  HttpRequest, 
-  HttpResponse, 
-  Collection, 
-  Environment, 
+import { describe, it, expect, beforeEach } from 'vitest';
+import type {
   EnvironmentVariable,
   Header,
-  Param,
-  RequestBody
 } from '../types';
-import { 
-  parseUrl, 
-  parseHeaders, 
-  buildUrlWithParams,
+import {
+  parseUrl,
+  parseHeaders,
 } from '../services/http';
-import { 
-  replaceEnvironmentVariables, 
-  applyEnvToUrl, 
-  applyEnvToHeaders,
-  applyEnvToParams,
-  applyEnvToBody,
-  extractEnvironmentVariables,
+import {
+  replaceEnvironmentVariables,
   isValidVariableName,
 } from '../utils/environment';
 import{
@@ -30,14 +18,10 @@ import{
   deleteCollection,
   createRequest,
   updateRequest,
-  deleteRequest,
   createFolder,
-  deleteFolder,
   moveRequest,
-  importCollection,
-  exportCollection,
 } from '../services/collection';
-import {
+import{
   createEnvironment,
   updateEnvironment,
   deleteEnvironment,
@@ -62,20 +46,13 @@ import {
 import {
   exportToPostman,
   exportToSwagger,
-  exportToJSON,
 } from '../utils/exporters';
 import {
-  createMockRequest,
   createMockCollection,
-  createMockEnvironment,
-  createMockEnvironmentVariables,
-  createMockHeader,
-  createMockParam,
 } from '../test/factories';
 
 describe('边缘情况和错误处理测试', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
   });
 
@@ -192,8 +169,8 @@ describe('边缘情况和错误处理测试', () => {
     it('应处理空变量列表', () => {
       const str = '{{VAR}}';
       expect(replaceEnvironmentVariables(str, [])).toBe(str);
-      expect(replaceEnvironmentVariables(str, null as any)).toBe(str);
-      expect(replaceEnvironmentVariables(str, undefined as any)).toBe(str);
+      expect(replaceEnvironmentVariables(str, null as unknown as EnvironmentVariable[])).toBe(str);
+      expect(replaceEnvironmentVariables(str, undefined as unknown as EnvironmentVariable[])).toBe(str);
     });
 
     it('应处理变量名包含空格', () => {
@@ -433,7 +410,7 @@ describe('边缘情况和错误处理测试', () => {
     it('应处理无效的 Postman 数据', () => {
       // 无效的 Postman 数据应抛出错误或返回默认值
       const invalidData = { info: { name: 'Test', _postman_id: '123' }, item: null };
-      const result = importPostmanCollection(invalidData as any);
+      const result = importPostmanCollection(invalidData as unknown as Record<string, unknown>);
       expect(result).toBeDefined();
       expect(result.requests).toEqual([]);
     });
@@ -444,14 +421,14 @@ describe('边缘情况和错误处理测试', () => {
         info: { title: 'Empty', version: '1.0.0' },
         paths: {},
       };
-      const result = importSwagger(emptySwagger as any);
+      const result = importSwagger(emptySwagger as unknown as Record<string, unknown>);
       expect(result.requests).toEqual([]);
     });
 
     it('应处理无效的 YApi 数据', () => {
       // YApi 导入需要特定格式的数据，空对象会导致错误
       // 这里测试函数能处理异常输入而不崩溃
-      expect(() => importYApi({} as any)).toThrow();
+      expect(() => importYApi({} as unknown as Record<string, unknown>)).toThrow();
     });
 
     it('应处理 autoImport 无法识别的格式', () => {
@@ -500,9 +477,9 @@ describe('边缘情况和错误处理测试', () => {
       const collection = createCollection('Test');
       
       // 模拟并发更新
-      const update1 = updateCollection(collection.id, { name: 'Update 1' });
-      const update2 = updateCollection(collection.id, { name: 'Update 2' });
-      const update3 = updateCollection(collection.id, { name: 'Update 3' });
+      updateCollection(collection.id, { name: 'Update 1' });
+      updateCollection(collection.id, { name: 'Update 2' });
+      updateCollection(collection.id, { name: 'Update 3' });
       
       // 最后一次更新应该生效
       const collections = loadCollections();

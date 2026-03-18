@@ -1,34 +1,18 @@
 // 边界情况测试 - 测试各种极端输入和边界条件
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { HttpRequest, HttpResponse, Collection, Environment, Header, Param } from '../types';
-import { 
-  parseUrl, 
-  parseHeaders, 
-  sendRequest,
+import { describe, it, expect } from 'vitest';
+import type { Header, Param } from '../types';
+import {
+  parseHeaders,
 } from '../services/http';
-import { 
-  replaceEnvironmentVariables, 
-  applyEnvToUrl, 
-  applyEnvToHeaders,
-  extractEnvironmentVariables,
+import {
+  replaceEnvironmentVariables,
 } from '../utils/environment';
 import {
-  exportToPostman,
-  exportToSwagger,
-  exportToJSON,
-} from '../utils/exporters';
-import {
-  importPostmanCollection,
-  importSwagger,
-  autoImport,
-} from '../utils/importers';
-import { 
-  createMockRequest, 
-  createMockCollection, 
-  createMockEnvironment,
+  createBoundaryTestData,
+  createMockRequest,
   createMockHeader,
   createMockParam,
-  createBoundaryTestData,
+  createMockCollection,
 } from '../test/factories';
 
 describe('边界情况测试 - Boundary Tests', () => {
@@ -114,9 +98,9 @@ describe('边界情况测试 - Boundary Tests', () => {
 
   describe('空值和 undefined 处理', () => {
     it('应正确处理 null 值', () => {
-      const request = createMockRequest({ 
-        description: null as any,
-        body: null as any
+      const request = createMockRequest({
+        description: null as unknown as undefined,
+        body: null as unknown as undefined
       });
       expect(request.description).toBeNull();
       expect(request.body).toBeNull();
@@ -155,12 +139,12 @@ describe('边界情况测试 - Boundary Tests', () => {
     });
 
     it('replaceEnvironmentVariables 应正确处理 null', () => {
-      const result = replaceEnvironmentVariables(null as any, []);
+      const result = replaceEnvironmentVariables(null as unknown as string, []);
       expect(result).toBeNull();
     });
 
     it('replaceEnvironmentVariables 应正确处理 undefined', () => {
-      const result = replaceEnvironmentVariables(undefined as any, []);
+      const result = replaceEnvironmentVariables(undefined as unknown as string, []);
       expect(result).toBeUndefined();
     });
   });
@@ -250,7 +234,7 @@ describe('边界情况测试 - Boundary Tests', () => {
       const collection = createMockCollection({}, { withFolders: true, folderCount: 2, nestedDepth: 5 });
       
       let maxDepth = 0;
-      const checkDepth = (folders: any[], currentDepth: number) => {
+      const checkDepth = (folders: Array<{ folders?: Array<Record<string, unknown>> }>, currentDepth: number) => {
         maxDepth = Math.max(maxDepth, currentDepth);
         folders.forEach(f => {
           if (f.folders?.length) {

@@ -134,7 +134,7 @@ function convertToPostmanBody(body: { mode: string; content?: string }): Postman
         mode: 'raw',
         raw: body.content || '',
       };
-    case 'urlencoded':
+    case 'urlencoded': {
       // 解析 URL 编码的表单数据
       const pairs: { key: string; value: string; type: string }[] = [];
       if (body.content) {
@@ -151,6 +151,7 @@ function convertToPostmanBody(body: { mode: string; content?: string }): Postman
         mode: 'urlencoded',
         urlencoded: pairs,
       };
+    }
     case 'formdata':
       return {
         mode: 'formdata',

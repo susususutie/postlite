@@ -88,7 +88,7 @@ export async function sendRequest(
     const size = blob.size;
     
     // 解析响应数据
-    let data: any;
+    let data: unknown;
     const contentType = response.headers.get('content-type') || '';
     
     try {

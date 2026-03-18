@@ -96,7 +96,7 @@ describe('Environment Service', () => {
     });
 
     it('should update environment to default', () => {
-      const env1 = createEnvironment('Env 1', true);
+      createEnvironment('Env 1', true);
       const env2 = createEnvironment('Env 2');
 
       const updated = updateEnvironment(env2.id, { isDefault: true });
@@ -125,7 +125,7 @@ describe('Environment Service', () => {
 
     it('should set another environment as default when deleting default', () => {
       const env1 = createEnvironment('Env 1', true);
-      const env2 = createEnvironment('Env 2');
+      createEnvironment('Env 2');
 
       deleteEnvironment(env1.id);
 
@@ -318,7 +318,6 @@ describe('Environment Service', () => {
 
     it('should return default environment when no current set', () => {
       createEnvironment('Development');
-      const defaultEnv = getEnvironments().find(e => e.isDefault);
 
       const current = getCurrentEnvironment();
 

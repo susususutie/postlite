@@ -1,23 +1,16 @@
 // 性能和压力测试
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { 
-  HttpRequest, 
-  Collection, 
-  Environment, 
+import { describe, it, expect, beforeEach } from 'vitest';
+import type {
   EnvironmentVariable,
   Header,
-  Param,
 } from '../types';
-import { 
-  parseHeaders, 
-  buildUrlWithParams,
-} from '../services/http';
-import { 
-  replaceEnvironmentVariables, 
-  applyEnvToUrl, 
-  applyEnvToHeaders,
-} from '../utils/environment';
 import {
+  parseHeaders,
+} from '../services/http';
+import {
+  replaceEnvironmentVariables,
+} from '../utils/environment';
+import{
   createCollection,
   createRequest,
   createFolder,
@@ -31,7 +24,6 @@ import{
 import{
   saveCollections,
   loadCollections,
-  saveEnvironments,
   loadEnvironments,
 } from '../store/storage';
 import{
@@ -40,14 +32,9 @@ import{
 } from '../utils/importers';
 import{
   exportToPostman,
-  exportToSwagger,
 } from '../utils/exporters';
 import{
-  createMockRequest,
   createMockCollection,
-  createMockEnvironment,
-  createMockHeaders,
-  createMockParams,
 } from '../test/factories';
 
 describe('性能和压力测试', () => {
@@ -221,7 +208,7 @@ describe('性能和压力测试', () => {
       };
 
       const start = performance.now();
-      const result = importPostmanCollection(largePostmanCollection as any);
+      const result = importPostmanCollection(largePostmanCollection as unknown as Record<string, unknown>);
       const end = performance.now();
 
       expect(end - start).toBeLessThan(2000);
@@ -245,7 +232,7 @@ describe('性能和压力测试', () => {
     });
 
     it('应能快速导入大型 Swagger 文档', () => {
-      const paths: Record<string, any> = {};
+      const paths: Record<string, unknown> = {};
       
       for (let i = 0; i < 200; i++) {
         paths[`/resource${i}`] = {
@@ -282,7 +269,7 @@ describe('性能和压力测试', () => {
       };
 
       const start = performance.now();
-      const result = importSwagger(largeSwagger as any);
+      const result = importSwagger(largeSwagger as unknown as Record<string, unknown>);
       const end = performance.now();
 
       expect(end - start).toBeLessThan(2000);
@@ -351,7 +338,7 @@ describe('性能和压力测试', () => {
   describe('并发操作模拟', () => {
     it('应能处理快速连续的更新操作', () => {
       const collection = createCollection('Test');
-      const request = createRequest(collection.id, {
+      createRequest(collection.id, {
         name: 'Original',
         method: 'GET',
         url: 'https://example.com',

@@ -1,30 +1,20 @@
 // 集成测试 - 测试多个服务的协同工作
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { HttpRequest, HttpResponse, Collection, Environment } from '../types';
-import { 
-  sendRequest, 
-  parseUrl, 
+import {
   parseHeaders,
 } from './http';
-import {
+import{
   createCollection,
   updateCollection,
   deleteCollection,
   createRequest,
-  updateRequest,
-  deleteRequest,
   createFolder,
   deleteFolder,
   getCollections,
-  importCollection as importColl,
   moveRequest,
 } from './collection';
-import {
-  getEnvironments,
+import{
   createEnvironment,
-  updateEnvironment,
-  deleteEnvironment,
-  setDefaultEnvironment,
   setEnvironmentVariables,
   getEnvironmentById,
 } from './environment';
@@ -32,7 +22,6 @@ import {
   replaceEnvironmentVariables,
   applyEnvToUrl,
   applyEnvToHeaders,
-  getCurrentVariables,
 } from '../utils/environment';
 import {
   importPostmanCollection,
@@ -41,7 +30,6 @@ import {
 import {
   exportToPostman,
   exportToSwagger,
-  exportToJSON,
 } from '../utils/exporters';
 import {
   saveCollections,
@@ -53,11 +41,8 @@ import {
   createMockRequest,
   createMockCollection,
   createMockEnvironment,
-  createMockEnvironmentVariables,
   createMockPostmanCollection,
   createMockSwaggerDocument,
-  createMockResponse,
-  createMockFolder,
 } from '../test/factories';
 
 describe('集成测试 - Integration Tests', () => {
@@ -244,7 +229,7 @@ describe('集成测试 - Integration Tests', () => {
       expect(imported.requests).toHaveLength(2);
 
       // 3. 创建环境变量
-      const env = createEnvironment('Production', [
+      createEnvironment('Production', [
         { key: 'API_HOST', value: 'https://prod.example.com', type: 'string', enabled: true },
       ]);
 
@@ -359,14 +344,14 @@ describe('集成测试 - Integration Tests', () => {
 
     it('应能在清除存储后正确重新创建数据', () => {
       // 初始创建
-      const collection1 = createCollection('First');
+      createCollection('First');
       expect(getCollections()).toHaveLength(1);
 
       // 模拟清除
       localStorage.clear();
       
       // 重新创建
-      const collection2 = createCollection('Second');
+      createCollection('Second');
       const collections = getCollections();
       
       expect(collections).toHaveLength(1);
@@ -531,7 +516,7 @@ describe('集成测试 - Integration Tests', () => {
       const collection = createCollection('E-Commerce API');
       const authFolder = createFolder(collection.id, 'Authentication');
       const userFolder = createFolder(collection.id, 'User Management');
-      const orderFolder = createFolder(collection.id, 'Orders');
+      createFolder(collection.id, 'Orders');
 
       // 2. 在 Authentication 文件夹创建登录请求
       createRequest(collection.id, {

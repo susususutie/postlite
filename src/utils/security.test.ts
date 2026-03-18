@@ -1,19 +1,11 @@
 // 安全相关测试
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { 
-  HttpRequest, 
-  Collection, 
-  Environment,
-} from '../types';
-import { 
-  replaceEnvironmentVariables, 
-  applyEnvToUrl, 
-  applyEnvToHeaders,
-} from '../utils/environment';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  replaceEnvironmentVariables,
+} from '../utils/environment';
+import{
   createCollection,
   createRequest,
-  updateRequest,
 } from '../services/collection';
 import{
   createEnvironment,
@@ -24,13 +16,8 @@ import{
 } from '../store/storage';
 import{
   importPostmanCollection,
-  importSwagger,
   autoImport,
 } from '../utils/importers';
-import{
-  createMockRequest,
-  createMockCollection,
-} from '../test/factories';
 
 describe('安全相关测试', () => {
   beforeEach(() => {
@@ -42,7 +29,7 @@ describe('安全相关测试', () => {
     it('应正确处理包含 script 标签的 URL', () => {
       const maliciousUrls = [
         'https://example.com/<script>alert(1)</script>',
-        'https://example.com/\"><script>alert(1)</script>',
+        'https://example.com/"><script>alert(1)</script>',
         "https://example.com/'><script>alert(1)</script>",
         'https://example.com/`><script>alert(1)</script>',
       ];
@@ -289,7 +276,7 @@ describe('安全相关测试', () => {
         ],
       };
 
-      const result = importPostmanCollection(maliciousCollection as any);
+      const result = importPostmanCollection(maliciousCollection as unknown as Record<string, unknown>);
       expect(result.name).toBe('<script>alert(1)</script>');
       expect(result.requests[0].name).toBe('<img src=x onerror=alert(1)>');
     });
@@ -315,7 +302,7 @@ describe('安全相关测试', () => {
         })),
       };
 
-      const result = importPostmanCollection(hugeCollection as any);
+      const result = importPostmanCollection(hugeCollection as unknown as Record<string, unknown>);
       expect(result.requests).toHaveLength(1000);
     });
 

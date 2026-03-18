@@ -549,7 +549,7 @@ describe('Importers', () => {
     });
 
     it('should return null for invalid format', () => {
-      const result = importCollection({}, 'invalid' as any);
+      const result = importCollection({}, 'invalid' as unknown as 'postman');
       expect(result).toBeNull();
     });
 

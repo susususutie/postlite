@@ -122,7 +122,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
   };
 
   // 处理节点选择
-  const handleSelect = (selectedKeys: React.Key[], info: any) => {
+  const handleSelect = (selectedKeys: React.Key[], info: { node: TreeNode }) => {
     const node = info.node as TreeNode;
     if (node.type === 'request' && node.data) {
       const request = node.data as HttpRequest;
@@ -176,8 +176,8 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
 
       setIsModalOpen(false);
       refresh();
-    } catch (error) {
-      console.error('Modal error:', error);
+    } catch {
+      // Modal validation error - no action needed
     }
   };
 
@@ -206,7 +206,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
       } else {
         message.error('Failed to import: Invalid format');
       }
-    } catch (error) {
+    } catch {
       message.error('Failed to import: Invalid JSON');
     }
   };

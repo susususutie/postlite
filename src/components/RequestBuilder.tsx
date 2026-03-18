@@ -80,7 +80,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
       setBody(initialRequest.body);
       setRequestName(initialRequest.name);
     }
-  }, [initialRequest?.id]);
+  }, [initialRequest]);
 
   // 发送请求
   const handleSend = useCallback(async () => {
@@ -152,7 +152,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
   };
 
   // 更新 Header
-  const updateHeader = (index: number, field: keyof Header, value: any) => {
+  const updateHeader = (index: number, field: keyof Header, value: unknown) => {
     const newHeaders = [...headers];
     newHeaders[index] = { ...newHeaders[index], [field]: value };
     setHeaders(newHeaders);
@@ -169,7 +169,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
   };
 
   // 更新 Param
-  const updateParam = (index: number, field: keyof Param, value: any) => {
+  const updateParam = (index: number, field: keyof Param, value: unknown) => {
     const newParams = [...params];
     newParams[index] = { ...newParams[index], [field]: value };
     setParams(newParams);
@@ -197,7 +197,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
       title: 'Enabled',
       dataIndex: 'enabled',
       width: 80,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Switch
           size="small"
           checked={headers[index].enabled}
@@ -208,7 +208,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     {
       title: 'Key',
       dataIndex: 'key',
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Input
           placeholder="Header name"
           value={headers[index].key}
@@ -220,7 +220,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     {
       title: 'Value',
       dataIndex: 'value',
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Input
           placeholder="Header value"
           value={headers[index].value}
@@ -232,7 +232,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     {
       title: '',
       width: 50,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Button
           type="text"
           danger
@@ -250,7 +250,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
       title: 'Enabled',
       dataIndex: 'enabled',
       width: 80,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Switch
           size="small"
           checked={params[index].enabled}
@@ -261,7 +261,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     {
       title: 'Key',
       dataIndex: 'key',
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Input
           placeholder="Parameter name"
           value={params[index].key}
@@ -273,7 +273,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     {
       title: 'Value',
       dataIndex: 'value',
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Input
           placeholder="Parameter value"
           value={params[index].value}
@@ -285,7 +285,7 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     {
       title: '',
       width: 50,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Button
           type="text"
           danger

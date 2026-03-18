@@ -246,7 +246,7 @@ describe('Storage Module', () => {
     });
 
     it('should merge partial settings with defaults', () => {
-      saveSettings({ theme: 'dark' } as any);
+      saveSettings({ theme: 'dark' } as Partial<Settings>);
       const loaded = loadSettings();
       expect(loaded.theme).toBe('dark');
       expect(loaded.timeout).toBe(30000);

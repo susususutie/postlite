@@ -146,7 +146,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
   };
 
   // 更新变量
-  const updateVariable = (index: number, field: keyof EnvironmentVariable, value: any) => {
+  const updateVariable = (index: number, field: keyof EnvironmentVariable, value: unknown) => {
     if (!currentEnv) return;
 
     const newVars = [...currentEnv.variables];
@@ -205,7 +205,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
       title: 'Enabled',
       dataIndex: 'enabled',
       width: 80,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Switch
           size="small"
           checked={currentEnv?.variables[index]?.enabled}
@@ -216,7 +216,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
     {
       title: 'Variable',
       dataIndex: 'key',
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Input
           placeholder="Variable name"
           value={currentEnv?.variables[index]?.key || ''}
@@ -228,7 +228,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
     {
       title: 'Value',
       dataIndex: 'value',
-      render: (_: any, __: any, index: number) => {
+      render: (_record: unknown, _index: unknown, index: number) => {
         const variable = currentEnv?.variables[index];
         if (!variable) return null;
 
@@ -261,7 +261,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
       title: 'Type',
       dataIndex: 'type',
       width: 100,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Select
           size="small"
           value={currentEnv?.variables[index]?.type || 'string'}
@@ -276,7 +276,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
     {
       title: '',
       width: 50,
-      render: (_: any, __: any, index: number) => (
+      render: (_record: unknown, _index: unknown, index: number) => (
         <Button
           type="text"
           danger

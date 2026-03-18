@@ -74,7 +74,7 @@ describe('Environment Utils', () => {
 
     it('should handle null/undefined variables', () => {
       const str = '{{baseUrl}}/api';
-      const result = replaceEnvironmentVariables(str, null as any);
+      const result = replaceEnvironmentVariables(str, null as unknown as EnvironmentVariable[]);
       expect(result).toBe('{{baseUrl}}/api');
     });
 
@@ -205,7 +205,7 @@ describe('Environment Utils', () => {
     });
 
     it('should return undefined for undefined input', () => {
-      const result = applyEnvToUrl(undefined as any, []);
+      const result = applyEnvToUrl(undefined as unknown as string, []);
       expect(result).toBeUndefined();
     });
   });

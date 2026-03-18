@@ -508,7 +508,7 @@ export function createBoundaryTestData() {
     
     // 嵌套深度
     deeplyNested: (depth: number) => {
-      let result: any = { value: 'leaf' };
+      let result: Record<string, unknown> = { value: 'leaf' };
       for (let i = 0; i < depth; i++) {
         result = { nested: result };
       }
@@ -533,7 +533,7 @@ export function createBoundaryTestData() {
 
 // ========== 测试状态工厂 ==========
 
-export function createMockAppState(overrides: Record<string, any> = {}) {
+export function createMockAppState(overrides: Record<string, unknown> = {}) {
   return {
     collections: createMockCollections(2, { withFolders: true, withRequests: true }),
     environments: createMockEnvironments(2, true),

@@ -365,7 +365,7 @@ function convertYApiInterface(iface: YApiInterface, project: YApiProject): HttpR
 
 // 通用导入函数
 export function importCollection(
-  data: any,
+  data: unknown,
   format: 'postman' | 'swagger' | 'yapi'
 ): Collection | null {
   try {

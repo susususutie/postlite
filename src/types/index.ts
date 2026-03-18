@@ -34,7 +34,7 @@ export interface HttpResponse {
   status: number;
   statusText: string;
   headers: Record<string, string>;
-  data: any;
+  data: unknown;
   time: number;
   size: number;
 }
@@ -104,7 +104,7 @@ export interface PostmanItem {
   description?: string;
   item?: PostmanItem[];
   request?: PostmanRequest;
-  response?: any[];
+  response?: unknown[];
 }
 
 export interface PostmanRequest {
@@ -128,7 +128,7 @@ export interface PostmanUrl {
   port?: string;
   path?: string[];
   query?: PostmanQuery[];
-  variable?: any[];
+  variable?: unknown[];
 }
 
 export interface PostmanQuery {
@@ -185,7 +185,7 @@ export interface SwaggerPathItem {
   patch?: SwaggerOperation;
   head?: SwaggerOperation;
   options?: SwaggerOperation;
-  parameters?: any[];
+  parameters?: unknown[];
 }
 
 export interface SwaggerOperation {
@@ -193,7 +193,7 @@ export interface SwaggerOperation {
   description?: string;
   operationId?: string;
   parameters?: SwaggerParameter[];
-  responses?: Record<string, any>;
+  responses?: Record<string, unknown>;
   tags?: string[];
 }
 
@@ -203,7 +203,7 @@ export interface SwaggerParameter {
   description?: string;
   required?: boolean;
   type?: string;
-  schema?: any;
+  schema?: unknown;
 }
 
 // YApi 格式
@@ -218,7 +218,7 @@ export interface YApiProject {
 export interface YApiEnv {
   name: string;
   domain: string;
-  header?: any[];
+  header?: unknown[];
 }
 
 export interface YApiInterface {

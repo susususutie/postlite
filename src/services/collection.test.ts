@@ -15,7 +15,7 @@ import {
   moveRequest,
   importCollection,
 } from './collection';
-import type { Collection, Folder, HttpRequest } from '../types';
+import type { Collection } from '../types';
 
 // Mock uuid
 vi.mock('uuid', () => ({
@@ -78,7 +78,9 @@ describe('Collection Service', () => {
 
       // Wait a bit to ensure different timestamp
       const start = Date.now();
-      while (Date.now() - start < 10) {} // Small delay
+      while (Date.now() - start < 10) {
+        // Intentional small delay for timestamp difference
+      }
 
       const updated = updateCollection(collection.id, {
         name: 'Updated Name',
