@@ -181,7 +181,7 @@ export function importSwagger(data: SwaggerDocument): Collection {
             path,
             operation,
             baseUrl,
-            pathItem.parameters || []
+            (pathItem.parameters as SwaggerParameter[]) || []
           );
 
           // 如果有 tag，放入对应文件夹
@@ -371,13 +371,24 @@ export function importCollection(
   try {
     switch (format) {
       case 'postman':
-        return importPostmanCollection(data);
+        return importPostmanCollection(data as PostmanCollection);
       case 'swagger':
-        return importSwagger(data);
+        return importSwagger(data as SwaggerDocument);
       case 'yapi':
         // YApi 需要项目、分类和接口三个数据
-        if (data.project && data.categories && data.interfaces) {
-          return importYApi(data.project, data.categories, data.interfaces);
+        if (
+          data &&
+          typeof data === 'object' &&
+          'project' in data &&
+          'categories' in data &&
+          'interfaces' in data
+        ) {
+          const yapiData = data as {
+            project: YApiProject;
+            categories: YApiCategory[];
+            interfaces: YApiInterface[];
+          };
+          return importYApi(yapiData.project, yapiData.categories, yapiData.interfaces);
         }
         return null;
       default:
