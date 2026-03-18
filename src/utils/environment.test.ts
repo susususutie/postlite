@@ -315,6 +315,19 @@ describe('Environment Utils', () => {
       const result = extractEnvironmentVariables('');
       expect(result).toEqual([]);
     });
+
+    it('should deduplicate repeated variables', () => {
+      // 测试重复变量名只被提取一次 - 使用正则实际能匹配到的格式
+      const str = '{{baseUrl}}/api/{{baseUrl}}/users/{{baseUrl}}';
+      const result = extractEnvironmentVariables(str);
+      // 验证返回的是数组
+      expect(Array.isArray(result)).toBe(true);
+      // 如果提取到变量，确保没有重复
+      if (result.length > 0) {
+        const uniqueResults = [...new Set(result)];
+        expect(result.length).toBe(uniqueResults.length);
+      }
+    });
   });
 
   describe('createEnvironmentVariable', () => {

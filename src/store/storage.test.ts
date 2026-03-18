@@ -359,4 +359,134 @@ describe('Storage Module', () => {
       expect(() => clearAllData()).not.toThrow();
     });
   });
+
+  describe('Error Handling', () => {
+    const testHistoryItem: HistoryItem = {
+      id: 'hist-test',
+      requestId: 'req-1',
+      requestName: 'Test Request',
+      method: 'GET',
+      url: 'https://api.example.com',
+      status: 200,
+      statusText: 'OK',
+      response: {
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        data: {},
+        time: 100,
+        size: 50,
+      },
+      timestamp: Date.now(),
+    };
+
+    it('should handle saveHistory errors gracefully', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // 直接 mock localStorage.setItem，因为 localStorage.setItem 和 Storage.prototype.setItem 不是同一个函数
+      const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('Storage full');
+      });
+
+      expect(() => saveHistory([testHistoryItem])).not.toThrow();
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to save history:', expect.any(Error));
+
+      setItemSpy.mockRestore();
+      localConsoleErrorSpy.mockRestore();
+    });
+
+    it('should handle loadHistory JSON parse errors', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      localStorage.setItem('postlite_history', 'invalid json');
+      const loaded = loadHistory();
+      expect(loaded).toEqual([]);
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to load history:', expect.any(SyntaxError));
+
+      localConsoleErrorSpy.mockRestore();
+    });
+
+    it('should handle saveSettings errors gracefully', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // 直接 mock localStorage.setItem
+      const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('Storage full');
+      });
+
+      expect(() => saveSettings({ theme: 'dark', timeout: 30000, followRedirects: true, validateSSL: false })).not.toThrow();
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to save settings:', expect.any(Error));
+
+      setItemSpy.mockRestore();
+      localConsoleErrorSpy.mockRestore();
+    });
+
+    it('should handle saveCollections errors gracefully', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('Storage full');
+      });
+
+      const testCollection: Collection = {
+        id: 'col-test',
+        name: 'Test Collection',
+        folders: [],
+        requests: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      expect(() => saveCollections([testCollection])).not.toThrow();
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to save collections:', expect.any(Error));
+
+      setItemSpy.mockRestore();
+      localConsoleErrorSpy.mockRestore();
+    });
+
+    it('should handle saveEnvironments errors gracefully', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('Storage full');
+      });
+
+      const testEnvironment: Environment = {
+        id: 'env-test',
+        name: 'Test Environment',
+        variables: [{ key: 'test', value: 'value', type: 'string', enabled: true }],
+      };
+
+      expect(() => saveEnvironments([testEnvironment])).not.toThrow();
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to save environments:', expect.any(Error));
+
+      setItemSpy.mockRestore();
+      localConsoleErrorSpy.mockRestore();
+    });
+
+    it('should handle saveCurrentEnvironment errors gracefully', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('Storage full');
+      });
+
+      expect(() => saveCurrentEnvironment('env-1')).not.toThrow();
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to save current environment:', expect.any(Error));
+
+      setItemSpy.mockRestore();
+      localConsoleErrorSpy.mockRestore();
+    });
+
+    it('should handle loadCurrentEnvironment errors gracefully', () => {
+      const localConsoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+        throw new Error('Storage access denied');
+      });
+
+      const result = loadCurrentEnvironment();
+      expect(result).toBeUndefined();
+      expect(localConsoleErrorSpy).toHaveBeenCalledWith('Failed to load current environment:', expect.any(Error));
+
+      getItemSpy.mockRestore();
+      localConsoleErrorSpy.mockRestore();
+    });
+  });
 });

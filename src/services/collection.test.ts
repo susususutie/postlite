@@ -207,8 +207,27 @@ describe('Collection Service', () => {
       expect(updated!.folders).toHaveLength(0);
     });
 
-    it.skip('should delete nested folder', () => {
-      // This test has issues with nested folder operations - skipping for now
+    it('should delete nested folder', () => {
+      const collection = createCollection('Test Collection');
+      const parentFolder = createFolder(collection.id, 'Parent Folder');
+
+      // 手动创建嵌套 folder 结构
+      const collections = JSON.parse(localStorage.getItem('postlite_collections') || '[]');
+      const col = collections.find((c: { id: string }) => c.id === collection.id);
+      const folder = col.folders.find((f: { id: string }) => f.id === parentFolder!.id);
+      folder.folders.push({
+        id: 'nested-folder-id',
+        name: 'Nested Folder',
+        folders: [],
+        requests: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      localStorage.setItem('postlite_collections', JSON.stringify(collections));
+
+      const result = deleteFolder(collection.id, 'nested-folder-id');
+
+      expect(result).toBe(true);
     });
 
     it('should return false for non-existent collection', () => {
@@ -336,6 +355,27 @@ describe('Collection Service', () => {
       const result = updateRequest(collection.id, 'non-existent', { name: 'New Name' });
       expect(result).toBeNull();
     });
+
+    it('should return null when collection does not exist', () => {
+      const result = updateRequest('non-existent-collection', 'some-request-id', { name: 'New Name' });
+      expect(result).toBeNull();
+    });
+
+    it('should return null when request exists but parent is null', () => {
+      // 这种情况发生在 folderId 提供但 folder 不存在时
+      const collection = createCollection('Test Collection');
+      const request = createRequest(collection.id, {
+        name: 'Test',
+        method: 'GET',
+        url: 'https://api.example.com',
+        headers: [],
+        params: [],
+      });
+
+      // 尝试用错误的 folderId 更新
+      const result = updateRequest(collection.id, request!.id, { name: 'New Name' }, 'non-existent-folder');
+      expect(result).toBeNull();
+    });
   });
 
   describe('deleteRequest', () => {
@@ -365,16 +405,47 @@ describe('Collection Service', () => {
         folder!.id
       );
 
+      // 获取删除前的更新时间
+      const collectionsBefore = JSON.parse(localStorage.getItem('postlite_collections') || '[]');
+      const folderBefore = collectionsBefore[0].folders.find((f: { id: string }) => f.id === folder!.id);
+      const updatedAtBefore = folderBefore.updatedAt;
+
+      // 等待一小段时间确保时间戳变化
+      const start = Date.now();
+      while (Date.now() - start < 10) {} // 简单的延迟
+
       const result = deleteRequest(collection.id, request!.id, folder!.id);
 
       expect(result).toBe(true);
       const updated = getCollectionById(collection.id);
       expect(updated!.folders[0].requests).toHaveLength(0);
+      // 验证 folder 的 updatedAt 被更新
+      expect(updated!.folders[0].updatedAt).toBeGreaterThan(updatedAtBefore);
     });
 
     it('should return false for non-existent request', () => {
       const collection = createCollection('Test Collection');
       const result = deleteRequest(collection.id, 'non-existent');
+      expect(result).toBe(false);
+    });
+
+    it('should return false when folder does not exist', () => {
+      const collection = createCollection('Test Collection');
+      const request = createRequest(collection.id, {
+        name: 'Test',
+        method: 'GET',
+        url: 'https://api.example.com',
+        headers: [],
+        params: [],
+      });
+
+      // 尝试用错误的 folderId 删除
+      const result = deleteRequest(collection.id, request!.id, 'non-existent-folder');
+      expect(result).toBe(false);
+    });
+
+    it('should return false when collection does not exist', () => {
+      const result = deleteRequest('non-existent-collection', 'some-request-id');
       expect(result).toBe(false);
     });
   });
@@ -431,6 +502,25 @@ describe('Collection Service', () => {
       const found = getRequestById(collection.id, 'non-existent');
       expect(found).toBeNull();
     });
+
+    it('should return null when collection does not exist', () => {
+      const found = getRequestById('non-existent-collection', 'some-request-id');
+      expect(found).toBeNull();
+    });
+
+    it('should return null when folder does not exist', () => {
+      const collection = createCollection('Test Collection');
+      const found = getRequestById(collection.id, 'some-request-id', 'non-existent-folder');
+      expect(found).toBeNull();
+    });
+
+    it('should return null when request does not exist in folder', () => {
+      const collection = createCollection('Test Collection');
+      const folder = createFolder(collection.id, 'Test Folder');
+      // 不创建任何 request，直接查找
+      const found = getRequestById(collection.id, 'non-existent-request', folder!.id);
+      expect(found).toBeNull();
+    });
   });
 
   describe('moveRequest', () => {
@@ -482,6 +572,21 @@ describe('Collection Service', () => {
     it('should return false for non-existent source request', () => {
       const collection = createCollection('Test Collection');
       const result = moveRequest(collection.id, 'non-existent', undefined, undefined);
+      expect(result).toBe(false);
+    });
+
+    it('should return false when source folder does not exist', () => {
+      const collection = createCollection('Test Collection');
+      const request = createRequest(collection.id, {
+        name: 'Test Request',
+        method: 'GET',
+        url: 'https://api.example.com',
+        headers: [],
+        params: [],
+      });
+
+      // 尝试从不存在的 folder 移动 request
+      const result = moveRequest(collection.id, request!.id, 'non-existent-folder', undefined);
       expect(result).toBe(false);
     });
 

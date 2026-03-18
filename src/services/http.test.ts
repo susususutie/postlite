@@ -240,6 +240,29 @@ describe('HTTP Service', () => {
       await expect(sendRequest(mockRequest)).rejects.toThrow('Network error');
     });
 
+    it('should re-throw Error instances that are not AbortError', async () => {
+      const customError = new Error('Custom error with specific message');
+      mockFetch.mockRejectedValue(customError);
+
+      await expect(sendRequest(mockRequest)).rejects.toThrow('Custom error with specific message');
+    });
+
+    it('should handle non-Error exception by throwing unknown error', async () => {
+      mockFetch.mockImplementation(() => {
+        throw null;
+      });
+
+      await expect(sendRequest(mockRequest)).rejects.toThrow('Unknown error occurred');
+    });
+
+    it('should handle string exception by throwing unknown error', async () => {
+      mockFetch.mockImplementation(() => {
+        throw 'string error';
+      });
+
+      await expect(sendRequest(mockRequest)).rejects.toThrow('Unknown error occurred');
+    });
+
     it.skip('should handle timeout', async () => {
       // Timeout test requires special handling - skipping for now
     });
@@ -442,6 +465,153 @@ describe('HTTP Service', () => {
       const result = await sendProxyRequest(mockRequest);
 
       expect(result.status).toBe(200);
+    });
+
+    it('should send request through service worker when available', async () => {
+      let messageHandler: ((event: { data: unknown }) => void) | null = null;
+
+      // 模拟 MessageChannel
+      const mockPort1 = {
+        set onmessage(handler: ((event: { data: unknown }) => void) | null) {
+          messageHandler = handler;
+        },
+      };
+      const mockPort2 = {};
+
+      class MockMessageChannel {
+        port1 = mockPort1;
+        port2 = mockPort2;
+      }
+
+      global.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
+
+      const mockPostMessage = vi.fn();
+      const mockController = { postMessage: mockPostMessage };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: { controller: mockController },
+        writable: true,
+      });
+
+      const responsePromise = sendProxyRequest(mockRequest);
+
+      // 模拟 service worker 响应
+      expect(mockPostMessage).toHaveBeenCalledTimes(1);
+
+      // 触发消息处理
+      if (messageHandler) {
+        messageHandler({
+          data: {
+            response: {
+              status: 200,
+              statusText: 'OK',
+              headers: { 'content-type': 'application/json' },
+              data: { success: true },
+              size: 100,
+            },
+          },
+        });
+      }
+
+      const result = await responsePromise;
+
+      expect(result.status).toBe(200);
+      expect(result.statusText).toBe('OK');
+      expect(result.data).toEqual({ success: true });
+      expect(result.time).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should handle service worker error response', async () => {
+      let messageHandler: ((event: { data: unknown }) => void) | null = null;
+
+      const mockPort1 = {
+        set onmessage(handler: ((event: { data: unknown }) => void) | null) {
+          messageHandler = handler;
+        },
+      };
+      const mockPort2 = {};
+
+      class MockMessageChannel {
+        port1 = mockPort1;
+        port2 = mockPort2;
+      }
+
+      global.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
+
+      const mockPostMessage = vi.fn();
+      const mockController = { postMessage: mockPostMessage };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: { controller: mockController },
+        writable: true,
+      });
+
+      const responsePromise = sendProxyRequest(mockRequest);
+
+      // 触发错误响应
+      if (messageHandler) {
+        messageHandler({
+          data: {
+            error: 'Network error',
+          },
+        });
+      }
+
+      await expect(responsePromise).rejects.toThrow('Network error');
+    });
+
+    it('should pass config to service worker', async () => {
+      let messageHandler: ((event: { data: unknown }) => void) | null = null;
+
+      const mockPort1 = {
+        set onmessage(handler: ((event: { data: unknown }) => void) | null) {
+          messageHandler = handler;
+        },
+      };
+      const mockPort2 = {};
+
+      class MockMessageChannel {
+        port1 = mockPort1;
+        port2 = mockPort2;
+      }
+
+      global.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
+
+      const mockPostMessage = vi.fn();
+      const mockController = { postMessage: mockPostMessage };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: { controller: mockController },
+        writable: true,
+      });
+
+      const config = { timeout: 5000, followRedirects: false };
+      const responsePromise = sendProxyRequest(mockRequest, config);
+
+      // 验证 postMessage 被调用时传递了 config
+      expect(mockPostMessage).toHaveBeenCalledTimes(1);
+      const [message] = mockPostMessage.mock.calls[0];
+
+      expect(message.type).toBe('PROXY_REQUEST');
+      expect(message.request).toEqual(mockRequest);
+      expect(message.config).toEqual(config);
+
+      // 清理 - 触发成功响应
+      if (messageHandler) {
+        messageHandler({
+          data: {
+            response: {
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              data: {},
+              size: 0,
+            },
+          },
+        });
+      }
+
+      await responsePromise;
     });
   });
 });

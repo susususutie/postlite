@@ -333,6 +333,22 @@ describe('Environment Service', () => {
       expect(result).not.toBeNull();
     });
 
+    it('should return null when no current and no default environment', () => {
+      // 创建一个环境但设置为非默认
+      const env = createEnvironment('Development');
+      // 修改环境为非默认
+      const envs = JSON.parse(localStorage.getItem('postlite_environments') || '[]');
+      envs.forEach((e: { isDefault?: boolean }) => {
+        e.isDefault = false;
+      });
+      localStorage.setItem('postlite_environments', JSON.stringify(envs));
+      // 清除当前环境设置
+      localStorage.removeItem('postlite_current_environment');
+
+      const result = getCurrentEnvironment();
+      expect(result).toBeNull();
+    });
+
     it('should handle invalid current environment id', () => {
       setCurrentEnvironment('non-existent-id');
       const result = getCurrentEnvironment();
