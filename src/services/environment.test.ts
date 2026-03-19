@@ -335,7 +335,7 @@ describe('Environment Service', () => {
 
     it('should return null when no current and no default environment', () => {
       // 创建一个环境但设置为非默认
-      const env = createEnvironment('Development');
+      createEnvironment('Development');
       // 修改环境为非默认
       const envs = JSON.parse(localStorage.getItem('postlite_environments') || '[]');
       envs.forEach((e: { isDefault?: boolean }) => {

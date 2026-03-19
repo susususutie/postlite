@@ -412,7 +412,9 @@ describe('Collection Service', () => {
 
       // 等待一小段时间确保时间戳变化
       const start = Date.now();
-      while (Date.now() - start < 10) {} // 简单的延迟
+      while (Date.now() - start < 15) {
+        // wait for timestamp to change
+      }
 
       const result = deleteRequest(collection.id, request!.id, folder!.id);
 
