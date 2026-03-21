@@ -172,6 +172,10 @@ function App() {
           onCollapse={setEnvCollapsed}
           collapsedWidth={0}
           reverseArrow
+          zeroWidthTriggerStyle={{
+            border: '1px solid var(--ant-color-border)',
+            borderRight: 0,
+          }}
           style={{
             background: colorBgContainer,
             borderLeft: '1px solid #f0f0f0',
