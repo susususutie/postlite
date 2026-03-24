@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import {
   Select,
   Button,
-  Table,
   Input,
   Switch,
   Space,
@@ -199,95 +198,6 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
     },
   ];
 
-  // 变量表格列
-  const variableColumns = [
-    {
-      title: 'Enabled',
-      dataIndex: 'enabled',
-      width: 80,
-      render: (_record: unknown, _index: unknown, index: number) => (
-        <Switch
-          size="small"
-          checked={currentEnv?.variables[index]?.enabled}
-          onChange={(checked) => updateVariable(index, 'enabled', checked)}
-        />
-      ),
-    },
-    {
-      title: 'Variable',
-      dataIndex: 'key',
-      render: (_record: unknown, _index: unknown, index: number) => (
-        <Input
-          placeholder="Variable name"
-          value={currentEnv?.variables[index]?.key || ''}
-          onChange={(e) => updateVariable(index, 'key', e.target.value)}
-          size="small"
-        />
-      ),
-    },
-    {
-      title: 'Value',
-      dataIndex: 'value',
-      render: (_record: unknown, _index: unknown, index: number) => {
-        const variable = currentEnv?.variables[index];
-        if (!variable) return null;
-
-        const isSecret = variable.type === 'secret';
-        const showValue = showSecrets[variable.key] || !isSecret;
-
-        return (
-          <Space style={{ width: '100%' }}>
-            <Input
-              placeholder="Variable value"
-              value={showValue ? variable.value : '••••••••'}
-              onChange={(e) => updateVariable(index, 'value', e.target.value)}
-              size="small"
-              type={isSecret && !showSecrets[variable.key] ? 'password' : 'text'}
-              style={{ flex: 1 }}
-            />
-            {isSecret && (
-              <Button
-                type="text"
-                size="small"
-                icon={showSecrets[variable.key] ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-                onClick={() => toggleSecretVisibility(variable.key)}
-              />
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Type',
-      dataIndex: 'type',
-      width: 100,
-      render: (_record: unknown, _index: unknown, index: number) => (
-        <Select
-          size="small"
-          value={currentEnv?.variables[index]?.type || 'string'}
-          onChange={(value) => updateVariable(index, 'type', value)}
-          style={{ width: '100%' }}
-        >
-          <Option value="string">String</Option>
-          <Option value="secret">Secret</Option>
-        </Select>
-      ),
-    },
-    {
-      title: '',
-      width: 50,
-      render: (_record: unknown, _index: unknown, index: number) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          size="small"
-          onClick={() => deleteVariable(index)}
-        />
-      ),
-    },
-  ];
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Space style={{ marginBottom: 16, justifyContent: 'space-between', width: '100%' }}>
@@ -330,25 +240,85 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
         <Card
           title={`Variables: ${currentEnv.name}`}
           size="small"
-          style={{ flex: 1 }}
+          style={{ flex: 1, overflow: 'auto' }}
         >
-          <Table
-            dataSource={currentEnv.variables.map((v, i) => ({ ...v, key: i }))}
-            columns={variableColumns}
-            pagination={false}
-            size="small"
-            footer={() => (
-              <Button
-                type="dashed"
-                block
-                icon={<PlusOutlined />}
-                onClick={addVariable}
-                size="small"
+          {currentEnv.variables.map((variable, index) => {
+            const isSecret = variable.type === 'secret';
+            const showValue = showSecrets[variable.key] || !isSecret;
+
+            return (
+              <div
+                key={variable.key || index}
+                style={{
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 6,
+                  padding: 12,
+                  marginBottom: 12,
+                }}
               >
-                Add Variable
-              </Button>
-            )}
-          />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Switch
+                    size="small"
+                    checked={variable.enabled}
+                    onChange={(checked) => updateVariable(index, 'enabled', checked)}
+                    style={{ width: 40 }}
+                  />
+                  <Input
+                    placeholder="Variable name"
+                    value={variable.key}
+                    onChange={(e) => updateVariable(index, 'key', e.target.value)}
+                    size="small"
+                    style={{ flex: 1, minWidth: 80 }}
+                  />
+                  <Select
+                    size="small"
+                    value={variable.type}
+                    onChange={(value) => updateVariable(index, 'type', value)}
+                    style={{ width: 90 }}
+                  >
+                    <Option value="string">String</Option>
+                    <Option value="secret">Secret</Option>
+                  </Select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Input
+                    placeholder="Variable value"
+                    value={showValue ? variable.value : '••••••••'}
+                    onChange={(e) => updateVariable(index, 'value', e.target.value)}
+                    size="small"
+                    type={isSecret && !showSecrets[variable.key] ? 'password' : 'text'}
+                    style={{ flex: 1, minWidth: 60 }}
+                  />
+                  <div style={{ width: 64, display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                    {isSecret && (
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={showSecrets[variable.key] ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                        onClick={() => toggleSecretVisibility(variable.key)}
+                      />
+                    )}
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      size="small"
+                      onClick={() => deleteVariable(index)}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <Button
+            type="dashed"
+            block
+            icon={<PlusOutlined />}
+            onClick={addVariable}
+            size="small"
+          >
+            Add Variable
+          </Button>
           <p style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
             Use {'{{variableName}}'} in requests to substitute values
           </p>
