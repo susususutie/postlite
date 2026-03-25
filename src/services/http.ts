@@ -1,5 +1,8 @@
 // HTTP 请求服务 - 使用 Service Worker 代理实现跨域
-import type { HttpRequest, HttpResponse, Header, Param } from '../types';
+import type { HttpRequest, HttpResponse, Header, Param, Collection, EnvironmentVariable } from '../types';
+import { StaticVariableResolver, resolveVariables, extractUnresolvedVariables } from '../utils/variables';
+import { normalizeUrl, isValidUrl, weakConcatenateBaseUrl } from '../utils/url';
+import { getCurrentEnvironment } from './environment';
 
 export interface RequestConfig {
   timeout?: number;
@@ -7,10 +10,59 @@ export interface RequestConfig {
   validateSSL?: boolean;
 }
 
-// 解析 URL 并应用环境变量
+export interface RequestContext {
+  collection?: Collection;
+  localVars?: EnvironmentVariable[];
+}
+
+/**
+ * Resolve request URL with variable substitution, base URL concatenation, and normalization
+ */
+export function resolveRequestUrl(
+  request: HttpRequest,
+  context?: RequestContext
+): { url: string; unresolvedVars: string[] } {
+  const environment = getCurrentEnvironment();
+  const envVars = environment?.variables || [];
+  const localVars = context?.localVars || [];
+
+  // 1. Determine raw URL (weak concatenation with defaultBaseUrl)
+  let rawUrl = request.url;
+  const collectionBaseUrl = context?.collection?.defaultBaseUrl;
+
+  // Weak concatenation: only when no protocol, no template, not absolute path, and baseUrl exists
+  if (rawUrl && collectionBaseUrl) {
+    rawUrl = weakConcatenateBaseUrl(rawUrl, collectionBaseUrl);
+  }
+
+  // 2. Create variable resolver
+  const resolver = new StaticVariableResolver(envVars, localVars);
+
+  // 3. Recursively resolve variables
+  let resolvedUrl: string;
+  try {
+    resolvedUrl = resolveVariables(rawUrl, resolver);
+  } catch (error) {
+    // Re-throw circular reference or depth limit errors with context
+    throw new Error(`Variable resolution failed: ${(error as Error).message}`);
+  }
+
+  // 4. Check for unresolved variables
+  const unresolvedVars = extractUnresolvedVariables(resolvedUrl);
+
+  // 5. Normalize URL only if there are no unresolved variables
+  // (to avoid encoding template syntax like {{variable}})
+  const normalizedUrl = unresolvedVars.length === 0
+    ? normalizeUrl(resolvedUrl)
+    : resolvedUrl;
+
+  return { url: normalizedUrl, unresolvedVars };
+}
+
+// 解析 URL 并应用环境变量 (legacy version for backward compatibility)
 export function parseUrl(url: string, params: Param[]): string {
   let parsedUrl = url;
-  
+
   // 添加查询参数
   const enabledParams = params.filter(p => p.enabled && p.key);
   if (enabledParams.length > 0) {
@@ -20,7 +72,7 @@ export function parseUrl(url: string, params: Param[]): string {
     });
     parsedUrl = urlObj.toString();
   }
-  
+
   return parsedUrl;
 }
 
@@ -36,14 +88,28 @@ export function parseHeaders(headers: Header[]): Record<string, string> {
 // 发送 HTTP 请求（通过 Service Worker 代理）
 export async function sendRequest(
   request: HttpRequest,
-  config: RequestConfig = {}
+  config: RequestConfig = {},
+  context?: RequestContext
 ): Promise<HttpResponse> {
   const startTime = Date.now();
   const { timeout = 30000 } = config;
-  
+
   try {
-    // 构建请求 URL
-    const url = parseUrl(request.url, request.params);
+    // 1. Resolve URL with variable substitution and normalization
+    const { url: resolvedUrl, unresolvedVars } = resolveRequestUrl(request, context);
+
+    // 2. Check for unresolved variables (strict validation in HTTP layer)
+    if (unresolvedVars.length > 0) {
+      throw new Error(`Unresolved variables: ${[...new Set(unresolvedVars)].join(', ')}`);
+    }
+
+    // 3. Validate final URL
+    if (!isValidUrl(resolvedUrl)) {
+      throw new Error(`Invalid URL after variable resolution: ${resolvedUrl}`);
+    }
+
+    // 4. Add query parameters
+    const url = parseUrl(resolvedUrl, request.params);
     
     // 构建请求头
     const headers = parseHeaders(request.headers);
@@ -132,7 +198,8 @@ export async function sendRequest(
 // 通过 Service Worker 代理发送请求（用于处理 CORS）
 export async function sendProxyRequest(
   request: HttpRequest,
-  config: RequestConfig = {}
+  config: RequestConfig = {},
+  context?: RequestContext
 ): Promise<HttpResponse> {
   // 检查 Service Worker 是否可用
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -167,5 +234,5 @@ export async function sendProxyRequest(
   }
   
   // 如果 Service Worker 不可用，直接发送请求
-  return sendRequest(request, config);
+  return sendRequest(request, config, context);
 }

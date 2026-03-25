@@ -43,6 +43,7 @@ export interface Collection {
   id: string;
   name: string;
   description?: string;
+  defaultBaseUrl?: string;      // Default baseURL for new requests (hint only)
   folders: Folder[];
   requests: HttpRequest[];
   createdAt: number;

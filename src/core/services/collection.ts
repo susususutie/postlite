@@ -43,12 +43,13 @@ export class CollectionService {
     // Async initialization hook - repositories are already initialized
   }
 
-  async createCollection(name: string, description?: string): Promise<Collection> {
+  async createCollection(name: string, description?: string, defaultBaseUrl?: string): Promise<Collection> {
     const now = Date.now();
     const storageCollection: StorageCollection = {
       id: uuidv4(),
       name,
       description,
+      defaultBaseUrl,
       createdAt: now,
       updatedAt: now,
     };
@@ -67,6 +68,7 @@ export class CollectionService {
       id: created.id,
       name: created.name,
       description: created.description,
+      defaultBaseUrl: created.defaultBaseUrl,
       folders: [this.toFolder(rootFolder)],
       requests: [],
       createdAt: created.createdAt,
@@ -87,6 +89,7 @@ export class CollectionService {
       id: storageCollection.id,
       name: storageCollection.name,
       description: storageCollection.description,
+      defaultBaseUrl: storageCollection.defaultBaseUrl,
       folders,
       requests,
       createdAt: storageCollection.createdAt,
@@ -105,6 +108,7 @@ export class CollectionService {
         id: storageCollection.id,
         name: storageCollection.name,
         description: storageCollection.description,
+        defaultBaseUrl: storageCollection.defaultBaseUrl,
         folders,
         requests,
         createdAt: storageCollection.createdAt,
@@ -128,6 +132,7 @@ export class CollectionService {
       id: updated.id,
       name: updated.name,
       description: updated.description,
+      defaultBaseUrl: updated.defaultBaseUrl,
       folders,
       requests,
       createdAt: updated.createdAt,

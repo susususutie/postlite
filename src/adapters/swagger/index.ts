@@ -12,6 +12,15 @@ function parseSwagger(data: unknown): CollectionIR {
   const items: ItemIR[] = [];
   const tagFolders: Map<string, ItemIR> = new Map();
 
+  // Extract defaultBaseUrl from servers (OpenAPI 3.0+) or host+basePath (Swagger 2.0)
+  let defaultBaseUrl: string | undefined;
+  if (doc.servers && doc.servers.length > 0) {
+    defaultBaseUrl = doc.servers[0].url;
+  } else if (doc.host) {
+    const scheme = doc.schemes?.[0] || 'https';
+    defaultBaseUrl = `${scheme}://${doc.host}${doc.basePath || ''}`;
+  }
+
   if (doc.paths) {
     Object.entries(doc.paths).forEach(([path, pathItem]) => {
       const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'] as const;
@@ -45,6 +54,7 @@ function parseSwagger(data: unknown): CollectionIR {
   return {
     name: doc.info?.title || 'Swagger Collection',
     description: doc.info?.description,
+    defaultBaseUrl,
     items,
   };
 }
@@ -55,8 +65,9 @@ function convertOperation(
   operation: SwaggerOperation,
   doc: SwaggerDocument
 ): ItemIR {
-  const baseUrl = buildBaseUrl(doc);
-  const url = `${baseUrl}${path}`;
+  // Always build full URL for backward compatibility
+  // The defaultBaseUrl is set at collection level for reference
+  const url = `${buildBaseUrl(doc)}${path}`;
 
   const allParams = [...(operation.parameters || []), ...((doc.paths?.[path] as SwaggerPathItem)?.parameters || [])];
 
@@ -165,6 +176,7 @@ interface SwaggerDocument {
   basePath?: string;
   host?: string;
   schemes?: string[];
+  servers?: { url: string; description?: string }[];
 }
 
 interface SwaggerPathItem {

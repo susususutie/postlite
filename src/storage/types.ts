@@ -15,6 +15,7 @@ export interface StorageCollection {
   id: string;
   name: string;
   description?: string;
+  defaultBaseUrl?: string;      // Default baseURL for new requests
   createdAt: number;
   updatedAt: number;
 }

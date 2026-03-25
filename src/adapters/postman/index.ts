@@ -11,6 +11,20 @@ function parsePostman(data: unknown): CollectionIR {
   const obj = data as PostmanCollection;
   const items: ItemIR[] = [];
 
+  // Extract Collection-level variables
+  const variables = obj.variable?.map(v => ({
+    key: v.key,
+    value: v.value || '',
+  })) || [];
+
+  // Try to find a baseUrl-like variable for defaultBaseUrl
+  const baseUrlVar = obj.variable?.find(v =>
+    v.key.toLowerCase().includes('url') ||
+    v.key.toLowerCase().includes('base') ||
+    v.key.toLowerCase().includes('host')
+  );
+  const defaultBaseUrl = baseUrlVar ? `{{${baseUrlVar.key}}}` : undefined;
+
   if (obj.item) {
     obj.item.forEach(item => {
       items.push(processItem(item));
@@ -20,6 +34,8 @@ function parsePostman(data: unknown): CollectionIR {
   return {
     name: obj.info?.name || 'Untitled Collection',
     description: obj.info?.description,
+    defaultBaseUrl,
+    variables: variables.length > 0 ? variables : undefined,
     items,
   };
 }
@@ -40,6 +56,9 @@ function processItem(item: PostmanItem): ItemIR {
 
 function convertRequest(item: PostmanItem): ItemIR {
   const request = item.request as PostmanRequest;
+
+  // For backward compatibility with existing tests, use string URL
+  // The structured URL format is supported in the types for future enhancement
   const url = typeof request.url === 'string' ? request.url : request.url.raw;
 
   const params: { key: string; value: string; enabled: boolean }[] = [];
@@ -115,7 +134,20 @@ function convertItemToPostman(item: ItemIR): PostmanItem {
     };
   }
 
-  const urlObj = parseUrl(item.url || '');
+  // Handle both string URLs and structured URL objects
+  let urlObj: PostmanUrl;
+  if (typeof item.url === 'string' || !item.url) {
+    urlObj = parseUrl(item.url || '');
+  } else {
+    // Structured URL object
+    urlObj = {
+      raw: item.url.raw,
+      protocol: item.url.protocol,
+      host: item.url.host,
+      path: item.url.path,
+      query: item.url.query?.map(q => ({ key: q.key, value: q.value })),
+    };
+  }
 
   return {
     name: item.name,
@@ -199,6 +231,7 @@ interface PostmanUrl {
   port?: string;
   path?: string[];
   query?: { key: string; value: string }[];
+  variable?: { key: string; value?: string; description?: string }[];
 }
 
 interface PostmanBody {

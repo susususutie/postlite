@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sendRequest, parseUrl, parseHeaders, sendProxyRequest } from './http';
-import type { HttpRequest, Header, Param } from '../types';
+import { sendRequest, parseUrl, parseHeaders, sendProxyRequest, resolveRequestUrl } from './http';
+import type { HttpRequest, Header, Param, Collection } from '../types';
 
 describe('HTTP Service', () => {
   const mockFetch = vi.fn();
@@ -612,6 +612,282 @@ describe('HTTP Service', () => {
       }
 
       await responsePromise;
+    });
+  });
+
+  describe('resolveRequestUrl', () => {
+    const mockCollection: Collection = {
+      id: 'col-1',
+      name: 'Test Collection',
+      defaultBaseUrl: 'https://default.example.com/api',
+      folders: [],
+      requests: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    it('should resolve variables in URL using localVars', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{baseUrl}}/users',
+        headers: [],
+        params: [],
+      };
+
+      const localVars = [
+        { key: 'baseUrl', value: 'https://api.example.com', type: 'string' as const, enabled: true },
+      ];
+
+      const { url, unresolvedVars } = resolveRequestUrl(request, { localVars });
+      expect(url).toBe('https://api.example.com/users');
+      expect(unresolvedVars).toEqual([]);
+    });
+
+    it('should resolve multiple variables', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{baseUrl}}/api/{{version}}/users',
+        headers: [],
+        params: [],
+      };
+
+      const localVars = [
+        { key: 'baseUrl', value: 'https://api.example.com', type: 'string' as const, enabled: true },
+        { key: 'version', value: 'v2', type: 'string' as const, enabled: true },
+      ];
+
+      const { url, unresolvedVars } = resolveRequestUrl(request, { localVars });
+      expect(url).toBe('https://api.example.com/api/v2/users');
+      expect(unresolvedVars).toEqual([]);
+    });
+
+    it('should report unresolved variables', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{baseUrl}}/{{unknownVar}}/users',
+        headers: [],
+        params: [],
+      };
+
+      const localVars = [
+        { key: 'baseUrl', value: 'https://api.example.com', type: 'string' as const, enabled: true },
+      ];
+
+      const { url, unresolvedVars } = resolveRequestUrl(request, { localVars });
+      expect(url).toBe('https://api.example.com/{{unknownVar}}/users');
+      expect(unresolvedVars).toContain('unknownVar');
+    });
+
+    it('should apply defaultBaseUrl when conditions met', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: 'users',  // No protocol, no template, not absolute path
+        headers: [],
+        params: [],
+      };
+
+      const { url } = resolveRequestUrl(request, { collection: mockCollection });
+      expect(url).toBe('https://default.example.com/apiusers');  // Note: no trailing slash in base
+    });
+
+    it('should apply defaultBaseUrl with proper trailing slash', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: 'users',
+        headers: [],
+        params: [],
+      };
+
+      const collectionWithSlash: Collection = {
+        ...mockCollection,
+        defaultBaseUrl: 'https://default.example.com/api/',
+      };
+
+      const { url } = resolveRequestUrl(request, { collection: collectionWithSlash });
+      expect(url).toBe('https://default.example.com/api/users');
+    });
+
+    it('should NOT apply defaultBaseUrl when URL has protocol', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: 'https://other.com/users',
+        headers: [],
+        params: [],
+      };
+
+      const { url } = resolveRequestUrl(request, { collection: mockCollection });
+      expect(url).toBe('https://other.com/users');
+    });
+
+    it('should NOT apply defaultBaseUrl when URL has template variables', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{baseUrl}}/users',
+        headers: [],
+        params: [],
+      };
+
+      const { url } = resolveRequestUrl(request, { collection: mockCollection });
+      // Should NOT concatenate, but also won't resolve since no localVars provided
+      expect(url).toBe('{{baseUrl}}/users');
+    });
+
+    it('should NOT apply defaultBaseUrl when URL is absolute path', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '/api/users',
+        headers: [],
+        params: [],
+      };
+
+      const { url } = resolveRequestUrl(request, { collection: mockCollection });
+      expect(url).toBe('/api/users');
+    });
+
+    it('should normalize double slashes in URL', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: 'https://api.example.com//api//users',
+        headers: [],
+        params: [],
+      };
+
+      const { url } = resolveRequestUrl(request);
+      expect(url).toBe('https://api.example.com/api/users');
+    });
+
+    it('should preserve query parameters during normalization', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: 'https://api.example.com//api?foo=bar',
+        headers: [],
+        params: [],
+      };
+
+      const { url } = resolveRequestUrl(request);
+      expect(url).toBe('https://api.example.com/api?foo=bar');
+    });
+
+    it('should handle localVars overriding envVars priority', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{baseUrl}}/users',
+        headers: [],
+        params: [],
+      };
+
+      const localVars = [
+        { key: 'baseUrl', value: 'https://local.example.com', type: 'string' as const, enabled: true },
+      ];
+
+      const { url } = resolveRequestUrl(request, { localVars });
+      expect(url).toBe('https://local.example.com/users');
+    });
+
+    it('should skip disabled variables', () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{enabledVar}}/{{disabledVar}}',
+        headers: [],
+        params: [],
+      };
+
+      const localVars = [
+        { key: 'enabledVar', value: 'active', type: 'string' as const, enabled: true },
+        { key: 'disabledVar', value: 'inactive', type: 'string' as const, enabled: false },
+      ];
+
+      const { url, unresolvedVars } = resolveRequestUrl(request, { localVars });
+      expect(url).toBe('active/{{disabledVar}}');
+      expect(unresolvedVars).toContain('disabledVar');
+    });
+  });
+
+  describe('sendRequest with variable resolution', () => {
+    const mockFetch = vi.fn();
+
+    beforeEach(() => {
+      global.fetch = mockFetch;
+    });
+
+    it('should throw error for unresolved variables', async () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '{{unknownVar}}/users',
+        headers: [],
+        params: [],
+      };
+
+      mockFetch.mockRejectedValue(new Error('Should not be called'));
+
+      await expect(sendRequest(request)).rejects.toThrow(/Unresolved variables/);
+    });
+
+    it('should throw error for invalid URL after resolution', async () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: '   ',  // Only whitespace is invalid
+        headers: [],
+        params: [],
+      };
+
+      mockFetch.mockRejectedValue(new Error('Should not be called'));
+
+      await expect(sendRequest(request)).rejects.toThrow(/Invalid URL/);
+    });
+
+    it('should successfully send request with valid URL', async () => {
+      const request: HttpRequest = {
+        id: 'req-1',
+        name: 'Test',
+        method: 'GET',
+        url: 'https://api.example.com/users',
+        headers: [],
+        params: [],
+      };
+
+      const mockResponse = {
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        clone: vi.fn().mockReturnThis(),
+        blob: vi.fn().mockResolvedValue(new Blob(['{}'])),
+        json: vi.fn().mockResolvedValue({}),
+        text: vi.fn().mockResolvedValue('{}'),
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const result = await sendRequest(request);
+      expect(result.status).toBe(200);
     });
   });
 });

@@ -18,16 +18,20 @@ export async function getCollections(): Promise<Collection[]> {
 }
 
 // 创建 Collection
-export async function createCollection(name: string, description?: string): Promise<Collection> {
+export async function createCollection(
+  name: string,
+  description?: string,
+  defaultBaseUrl?: string
+): Promise<Collection> {
   await initStorage();
   const service = getServiceNotNull();
-  return service.createCollection(name, description);
+  return service.createCollection(name, description, defaultBaseUrl);
 }
 
 // 更新 Collection
 export async function updateCollection(
   collectionId: string,
-  updates: Partial<Pick<Collection, 'name' | 'description'>>
+  updates: Partial<Pick<Collection, 'name' | 'description' | 'defaultBaseUrl'>>
 ): Promise<Collection | null> {
   await initStorage();
   const service = getServiceNotNull();
