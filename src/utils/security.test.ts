@@ -1,5 +1,6 @@
 // 安全相关测试
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { Environment } from '../types';
 import {
   replaceEnvironmentVariables,
 } from '../utils/environment';
@@ -21,12 +22,11 @@ import{
 
 describe('安全相关测试', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
   });
 
   describe('XSS 防护', () => {
-    it('应正确处理包含 script 标签的 URL', () => {
+    it('应正确处理包含 script 标签的 URL', async () => {
       const maliciousUrls = [
         'https://example.com/<script>alert(1)</script>',
         'https://example.com/"><script>alert(1)</script>',
@@ -34,9 +34,9 @@ describe('安全相关测试', () => {
         'https://example.com/`><script>alert(1)</script>',
       ];
 
-      maliciousUrls.forEach(url => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const url of maliciousUrls) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'XSS Test',
           method: 'GET',
           url,
@@ -44,13 +44,13 @@ describe('安全相关测试', () => {
           params: [],
         });
 
-        expect(request.url).toBe(url);
-      });
+        expect(request!.url).toBe(url);
+      }
     });
 
-    it('应正确处理包含 HTML 的 Header 值', () => {
-      const collection = createCollection('Test');
-      const request = createRequest(collection.id, {
+    it('应正确处理包含 HTML 的 Header 值', async () => {
+      const collection = await createCollection('Test');
+      const request = await createRequest(collection.id, {
         name: 'XSS Header Test',
         method: 'GET',
         url: 'https://example.com',
@@ -61,11 +61,11 @@ describe('安全相关测试', () => {
         params: [],
       });
 
-      expect(request.headers[0].value).toBe('<img src=x onerror=alert(1)>');
-      expect(request.headers[1].value).toBe('<script>alert(1)</script>');
+      expect(request!.headers[0].value).toBe('<img src=x onerror=alert(1)>');
+      expect(request!.headers[1].value).toBe('<script>alert(1)</script>');
     });
 
-    it('应正确处理包含 JavaScript 伪协议的 URL', () => {
+    it('应正确处理包含 JavaScript 伪协议的 URL', async () => {
       const maliciousUrls = [
         'javascript:alert(1)',
         'javascript://alert(1)',
@@ -73,9 +73,9 @@ describe('安全相关测试', () => {
         'vbscript:alert(1)',
       ];
 
-      maliciousUrls.forEach(url => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const url of maliciousUrls) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'Protocol Test',
           method: 'GET',
           url,
@@ -83,14 +83,13 @@ describe('安全相关测试', () => {
           params: [],
         });
 
-        // 应允许存储，但使用时需要验证
-        expect(request.url).toBe(url);
-      });
+        expect(request!.url).toBe(url);
+      }
     });
   });
 
   describe('SQL 注入防护', () => {
-    it('应正确处理包含 SQL 注入字符的参数', () => {
+    it('应正确处理包含 SQL 注入字符的参数', async () => {
       const sqlInjectionParams = [
         "'; DROP TABLE users; --",
         "1' OR '1'='1",
@@ -99,9 +98,9 @@ describe('安全相关测试', () => {
         "1' AND 1=1--",
       ];
 
-      sqlInjectionParams.forEach(param => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const param of sqlInjectionParams) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'SQL Injection Test',
           method: 'GET',
           url: 'https://example.com/api',
@@ -109,18 +108,18 @@ describe('安全相关测试', () => {
           params: [{ key: 'id', value: param, enabled: true }],
         });
 
-        expect(request.params[0].value).toBe(param);
-      });
+        expect(request!.params[0].value).toBe(param);
+      }
     });
 
-    it('应正确处理包含 SQL 关键字的请求体', () => {
+    it('应正确处理包含 SQL 关键字的请求体', async () => {
       const maliciousBody = {
         query: "SELECT * FROM users WHERE id = '1' OR '1'='1'",
         command: "'; DELETE FROM users; --",
       };
 
-      const collection = createCollection('Test');
-      const request = createRequest(collection.id, {
+      const collection = await createCollection('Test');
+      const request = await createRequest(collection.id, {
         name: 'SQL Body Test',
         method: 'POST',
         url: 'https://example.com/api',
@@ -132,13 +131,13 @@ describe('安全相关测试', () => {
         },
       });
 
-      expect(request.body!.content).toContain('SELECT');
-      expect(request.body!.content).toContain('DELETE');
+      expect(request!.body!.content).toContain('SELECT');
+      expect(request!.body!.content).toContain('DELETE');
     });
   });
 
   describe('命令注入防护', () => {
-    it('应正确处理包含命令注入字符的输入', () => {
+    it('应正确处理包含命令注入字符的输入', async () => {
       const commandInjectionStrings = [
         '$(whoami)',
         '`whoami`',
@@ -150,9 +149,9 @@ describe('安全相关测试', () => {
         '> /tmp/output',
       ];
 
-      commandInjectionStrings.forEach(cmd => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const cmd of commandInjectionStrings) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'Command Injection Test',
           method: 'POST',
           url: 'https://example.com/api',
@@ -160,13 +159,13 @@ describe('安全相关测试', () => {
           params: [{ key: 'input', value: cmd, enabled: true }],
         });
 
-        expect(request.params[0].value).toBe(cmd);
-      });
+        expect(request!.params[0].value).toBe(cmd);
+      }
     });
   });
 
   describe('路径遍历防护', () => {
-    it('应正确处理包含路径遍历的 URL', () => {
+    it('应正确处理包含路径遍历的 URL', async () => {
       const pathTraversalUrls = [
         'https://example.com/../../../etc/passwd',
         'https://example.com/..\\..\\..\\windows\\system32\\config\\sam',
@@ -174,9 +173,9 @@ describe('安全相关测试', () => {
         'https://example.com/....//....//etc/passwd',
       ];
 
-      pathTraversalUrls.forEach(url => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const url of pathTraversalUrls) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'Path Traversal Test',
           method: 'GET',
           url,
@@ -184,13 +183,13 @@ describe('安全相关测试', () => {
           params: [],
         });
 
-        expect(request.url).toBe(url);
-      });
+        expect(request!.url).toBe(url);
+      }
     });
   });
 
   describe('JSON 注入防护', () => {
-    it('应正确处理包含特殊 JSON 字符的请求体', () => {
+    it('应正确处理包含特殊 JSON 字符的请求体', async () => {
       const maliciousBodies = [
         { key: 'value"}, {"injected": "true' },
         { key: 'value\x00' },
@@ -198,9 +197,9 @@ describe('安全相关测试', () => {
         { key: '</script><script>alert(1)</script>' },
       ];
 
-      maliciousBodies.forEach(body => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const body of maliciousBodies) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'JSON Injection Test',
           method: 'POST',
           url: 'https://example.com/api',
@@ -212,9 +211,8 @@ describe('安全相关测试', () => {
           },
         });
 
-        // 应能正确存储和解析
-        expect(() => JSON.parse(request.body!.content!)).not.toThrow();
-      });
+        expect(() => JSON.parse(request!.body!.content!)).not.toThrow();
+      }
     });
   });
 
@@ -227,7 +225,6 @@ describe('安全相关测试', () => {
         { key: 'SECRET', value: 'sec\tret', type: 'secret', enabled: true },
       ]);
 
-      // 变量值应保持原样
       const environments = loadEnvironments();
       const savedEnv = environments.find((e: Environment) => e.id === env.id);
 
@@ -235,19 +232,11 @@ describe('安全相关测试', () => {
     });
 
     it('应防止环境变量循环引用', () => {
-      const env = createEnvironment('Test');
-      setEnvironmentVariables(env.id, [
-        { key: 'VAR_A', value: '{{VAR_B}}', type: 'string', enabled: true },
-        { key: 'VAR_B', value: '{{VAR_A}}', type: 'string', enabled: true },
-      ]);
-
-      // 当前实现会进行递归替换
       const result = replaceEnvironmentVariables('{{VAR_A}}', [
         { key: 'VAR_A', value: '{{VAR_B}}', type: 'string', enabled: true },
         { key: 'VAR_B', value: '{{VAR_A}}', type: 'string', enabled: true },
       ]);
 
-      // 递归替换结果
       expect(result).toBe('{{VAR_A}}');
     });
   });
@@ -321,7 +310,6 @@ describe('安全相关测试', () => {
       invalidFormats.forEach(data => {
         if (typeof data === 'string') {
           const result = autoImport(data);
-          // 大多数应该返回 null
           expect(result === null || typeof result === 'object').toBe(true);
         }
       });
@@ -329,16 +317,16 @@ describe('安全相关测试', () => {
   });
 
   describe('URL 安全', () => {
-    it('应处理包含用户凭证的 URL', () => {
+    it('应处理包含用户凭证的 URL', async () => {
       const urlsWithCredentials = [
         'https://user:pass@example.com',
         'https://admin:password123@api.example.com/path',
         'ftp://anonymous:anonymous@ftp.example.com',
       ];
 
-      urlsWithCredentials.forEach(url => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const url of urlsWithCredentials) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'Credentials Test',
           method: 'GET',
           url,
@@ -346,20 +334,20 @@ describe('安全相关测试', () => {
           params: [],
         });
 
-        expect(request.url).toBe(url);
-      });
+        expect(request!.url).toBe(url);
+      }
     });
 
-    it('应处理包含敏感查询参数的 URL', () => {
+    it('应处理包含敏感查询参数的 URL', async () => {
       const sensitiveUrls = [
         'https://example.com?password=secret123',
         'https://example.com?token=abc123&api_key=xyz789',
         'https://example.com?session_id=abc&auth_token=xyz',
       ];
 
-      sensitiveUrls.forEach(url => {
-        const collection = createCollection('Test');
-        const request = createRequest(collection.id, {
+      for (const url of sensitiveUrls) {
+        const collection = await createCollection('Test');
+        const request = await createRequest(collection.id, {
           name: 'Sensitive Params Test',
           method: 'GET',
           url,
@@ -367,13 +355,13 @@ describe('安全相关测试', () => {
           params: [],
         });
 
-        expect(request.url).toBe(url);
-      });
+        expect(request!.url).toBe(url);
+      }
     });
   });
 
   describe('Header 安全', () => {
-    it('应处理包含敏感信息的 Headers', () => {
+    it('应处理包含敏感信息的 Headers', async () => {
       const sensitiveHeaders = [
         { key: 'Authorization', value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', enabled: true },
         { key: 'Cookie', value: 'session_id=abc123; auth_token=xyz789', enabled: true },
@@ -381,8 +369,8 @@ describe('安全相关测试', () => {
         { key: 'X-Auth-Token', value: 'private-token-value', enabled: true },
       ];
 
-      const collection = createCollection('Test');
-      const request = createRequest(collection.id, {
+      const collection = await createCollection('Test');
+      const request = await createRequest(collection.id, {
         name: 'Sensitive Headers Test',
         method: 'GET',
         url: 'https://example.com',
@@ -391,7 +379,7 @@ describe('安全相关测试', () => {
       });
 
       sensitiveHeaders.forEach((header, index) => {
-        expect(request.headers[index].value).toBe(header.value);
+        expect(request!.headers[index].value).toBe(header.value);
       });
     });
   });

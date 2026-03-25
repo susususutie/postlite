@@ -57,16 +57,13 @@ describe('集成测试 - Integration Tests', () => {
 
   describe('完整的请求生命周期流程', () => {
     it('应能创建 Collection -> 添加环境变量 -> 创建请求 -> 应用环境变量 -> 发送请求', async () => {
-      // 1. 创建 Collection
-      const collection = createCollection('API Collection');
+      const collection = await createCollection('API Collection');
       expect(collection).toBeDefined();
       expect(collection.name).toBe('API Collection');
 
-      // 2. 创建环境并添加变量
       const env = createEnvironment('Development');
       expect(env).toBeDefined();
       
-      // 使用 setEnvironmentVariables 批量设置环境变量
       const envWithVars = setEnvironmentVariables(env.id, [
         { key: 'BASE_URL', value: 'https://api.example.com', type: 'string', enabled: true },
         { key: 'API_KEY', value: 'secret123', type: 'secret', enabled: true },
@@ -74,8 +71,7 @@ describe('集成测试 - Integration Tests', () => {
       expect(envWithVars).toBeDefined();
       expect(envWithVars!.variables).toHaveLength(2);
 
-      // 3. 创建请求
-      const request = createRequest(
+      const request = await createRequest(
         collection.id,
         {
           name: 'Get Users',
@@ -88,27 +84,23 @@ describe('集成测试 - Integration Tests', () => {
         }
       );
       expect(request).toBeDefined();
-      expect(request.url).toBe('{{BASE_URL}}/users');
+      expect(request!.url).toBe('{{BASE_URL}}/users');
 
-      // 4. 应用环境变量
-      const appliedUrl = applyEnvToUrl(request.url, envWithVars!.variables);
+      const appliedUrl = applyEnvToUrl(request!.url, envWithVars!.variables);
       expect(appliedUrl).toBe('https://api.example.com/users');
 
-      const headers = parseHeaders(request.headers);
+      const headers = parseHeaders(request!.headers);
       const appliedHeaders = applyEnvToHeaders(headers, envWithVars!.variables);
       expect(appliedHeaders['Authorization']).toBe('Bearer secret123');
     });
 
-    it('应能完成 Collection -> Folder -> Request 的嵌套创建流程', () => {
-      // 创建 Collection
-      const collection = createCollection('My API');
+    it('应能完成 Collection -> Folder -> Request 的嵌套创建流程', async () => {
+      const collection = await createCollection('My API');
       
-      // 创建一级 Folder
-      const folder1 = createFolder(collection.id, 'Auth APIs');
+      const folder1 = await createFolder(collection.id, 'Auth APIs');
       expect(folder1).toBeDefined();
       
-      // 在 Folder 中创建请求
-      const request1 = createRequest(
+      const request1 = await createRequest(
         collection.id,
         {
           name: 'Login',
@@ -121,16 +113,14 @@ describe('集成测试 - Integration Tests', () => {
             content: JSON.stringify({ username: 'test', password: 'pass' }),
           },
         },
-        folder1.id
+        folder1!.id
       );
       expect(request1).toBeDefined();
 
-      // 创建嵌套 Folder
-      const folder2 = createFolder(collection.id, 'User APIs', folder1.id);
+      const folder2 = await createFolder(collection.id, 'User APIs', folder1!.id);
       expect(folder2).toBeDefined();
 
-      // 在嵌套 Folder 中创建请求
-      const request2 = createRequest(
+      const request2 = await createRequest(
         collection.id,
         {
           name: 'Get Profile',
@@ -139,12 +129,11 @@ describe('集成测试 - Integration Tests', () => {
           headers: [{ key: 'Authorization', value: 'token', enabled: true }],
           params: [],
         },
-        folder2.id
+        folder2!.id
       );
       expect(request2).toBeDefined();
 
-      // 验证嵌套结构
-      const collections = getCollections();
+      const collections = await getCollections();
       const savedCollection = collections.find(c => c.id === collection.id);
       expect(savedCollection).toBeDefined();
       expect(savedCollection!.folders).toHaveLength(1);
@@ -153,8 +142,7 @@ describe('集成测试 - Integration Tests', () => {
   });
 
   describe('导入导出完整流程', () => {
-    it('应能导入 Postman Collection -> 修改 -> 导出为 Swagger', () => {
-      // 1. 创建 Postman 格式数据
+    it('应能导入 Postman Collection -> 修改 -> 导出为 Swagger', async () => {
       const postmanData = createMockPostmanCollection({
         info: {
           _postman_id: 'test-id',
@@ -179,28 +167,26 @@ describe('集成测试 - Integration Tests', () => {
         ],
       });
 
-      // 2. 导入
       const imported = importPostmanCollection(postmanData);
       expect(imported).toBeDefined();
       expect(imported.name).toBe('Test Import');
       expect(imported.requests).toHaveLength(1);
 
-      // 3. 保存到存储
-      saveCollections([imported]);
+      const importedCollection = await createCollection(imported.name, imported.description);
+      for (const req of imported.requests) {
+        await createRequest(importedCollection.id, req);
+      }
 
-      // 4. 修改 Collection
-      const updated = updateCollection(imported.id, { name: 'Modified Collection' });
+      const updated = await updateCollection(importedCollection.id, { name: 'Modified Collection' });
       expect(updated).toBeDefined();
       expect(updated!.name).toBe('Modified Collection');
 
-      // 5. 导出为 Swagger
       const swaggerExport = exportToSwagger(updated!);
       expect(swaggerExport.swagger).toBe('2.0');
       expect(swaggerExport.info.title).toBe('Modified Collection');
     });
 
     it('应能完成 Swagger -> Collection -> 添加环境变量 -> Postman 导出的流程', () => {
-      // 1. 创建 Swagger 数据
       const swaggerData = createMockSwaggerDocument({
         paths: {
           '/api/users': {
@@ -223,23 +209,17 @@ describe('集成测试 - Integration Tests', () => {
         },
       });
 
-      // 2. 导入 Swagger
       const imported = importSwagger(swaggerData);
       expect(imported).toBeDefined();
       expect(imported.requests).toHaveLength(2);
 
-      // 3. 创建环境变量
-      createEnvironment('Production', [
-        { key: 'API_HOST', value: 'https://prod.example.com', type: 'string', enabled: true },
-      ]);
+      createEnvironment('Production', true);
 
-      // 4. 更新请求 URL
       const updatedRequests = imported.requests.map(req => ({
         ...req,
         url: req.url.replace('https://api.example.com', '{{API_HOST}}'),
       }));
 
-      // 5. 导出为 Postman
       const collectionWithRequests = { ...imported, requests: updatedRequests };
       const postmanExport = exportToPostman(collectionWithRequests);
       expect(postmanExport.info.name).toBe(imported.name);
@@ -249,7 +229,6 @@ describe('集成测试 - Integration Tests', () => {
 
   describe('环境变量与请求集成', () => {
     it('应能在请求发送前正确应用环境变量到 URL、Headers 和 Body', () => {
-      // 创建环境并设置变量
       const env = createEnvironment('Test');
       const envWithVars = setEnvironmentVariables(env.id, [
         { key: 'BASE_URL', value: 'https://api.test.com', type: 'string', enabled: true },
@@ -257,7 +236,6 @@ describe('集成测试 - Integration Tests', () => {
         { key: 'USER_ID', value: '12345', type: 'string', enabled: true },
       ]);
 
-      // 创建带环境变量占位符的请求
       const request = createMockRequest({
         url: '{{BASE_URL}}/users/{{USER_ID}}',
         headers: [
@@ -270,16 +248,13 @@ describe('集成测试 - Integration Tests', () => {
         },
       });
 
-      // 应用环境变量到 URL
       const appliedUrl = applyEnvToUrl(request.url, envWithVars!.variables);
       expect(appliedUrl).toBe('https://api.test.com/users/12345');
 
-      // 应用环境变量到 Headers
       const headers = parseHeaders(request.headers);
       const appliedHeaders = applyEnvToHeaders(headers, envWithVars!.variables);
       expect(appliedHeaders['Authorization']).toBe('Bearer test-token-123');
 
-      // 应用环境变量到 Body
       const appliedBody = request.body?.content 
         ? replaceEnvironmentVariables(request.body.content, envWithVars!.variables)
         : undefined;
@@ -287,7 +262,6 @@ describe('集成测试 - Integration Tests', () => {
     });
 
     it('应能正确切换环境并应用不同的变量值', () => {
-      // 创建两个环境
       const devEnv = createEnvironment('Development');
       setEnvironmentVariables(devEnv.id, [
         { key: 'API_URL', value: 'https://dev.api.com', type: 'string', enabled: true },
@@ -302,15 +276,12 @@ describe('集成测试 - Integration Tests', () => {
 
       const urlTemplate = '{{API_URL}}/api/users';
 
-      // 重新加载以获取带变量的环境
       const devEnvWithVars = getEnvironmentById(devEnv.id);
       const prodEnvWithVars = getEnvironmentById(prodEnv.id);
 
-      // 应用 Dev 环境
       const devUrl = applyEnvToUrl(urlTemplate, devEnvWithVars!.variables);
       expect(devUrl).toBe('https://dev.api.com/api/users');
 
-      // 应用 Prod 环境
       const prodUrl = applyEnvToUrl(urlTemplate, prodEnvWithVars!.variables);
       expect(prodUrl).toBe('https://prod.api.com/api/users');
     });
@@ -318,20 +289,15 @@ describe('集成测试 - Integration Tests', () => {
 
   describe('存储层集成', () => {
     it('应能正确持久化和恢复 Collection 及环境数据', () => {
-      // 创建数据
       const collection = createMockCollection({}, { withRequests: true, requestCount: 3 });
       const env = createMockEnvironment({}, true, 5);
 
-      // 保存
       saveCollections([collection]);
-      // 保存环境时先清空现有环境以避免默认环境干扰计数
       saveEnvironments([env]);
 
-      // 恢复
       const loadedCollections = loadCollections();
       const loadedEnvs = loadEnvironments();
 
-      // 验证
       expect(loadedCollections).toHaveLength(1);
       expect(loadedCollections[0].name).toBe(collection.name);
       expect(loadedCollections[0].requests).toHaveLength(3);
@@ -342,31 +308,26 @@ describe('集成测试 - Integration Tests', () => {
       expect(savedEnv!.variables).toHaveLength(5);
     });
 
-    it('应能在清除存储后正确重新创建数据', () => {
-      // 初始创建
-      createCollection('First');
-      expect(getCollections()).toHaveLength(1);
-
-      // 模拟清除
+    it('应能在清除存储后正确重新创建数据', async () => {
+      await createCollection('First');
+      
       localStorage.clear();
       
-      // 重新创建
-      createCollection('Second');
-      const collections = getCollections();
+      const secondCollection = await createCollection('Second');
+      const collections = await getCollections();
       
-      expect(collections).toHaveLength(1);
-      expect(collections[0].name).toBe('Second');
+      const found = collections.find(c => c.id === secondCollection.id);
+      expect(found).toBeDefined();
+      expect(found!.name).toBe('Second');
     });
   });
 
   describe('Request 移动和重组', () => {
-    it('应能将 Request 从 Collection 移动到 Folder', () => {
-      // 创建 Collection 和 Folder
-      const collection = createCollection('Test Collection');
-      const folder = createFolder(collection.id, 'Test Folder');
+    it('应能将 Request 从 Collection 移动到 Folder', async () => {
+      const collection = await createCollection('Test Collection');
+      const folder = await createFolder(collection.id, 'Test Folder');
 
-      // 在 Collection 根目录创建请求
-      const request = createRequest(
+      const request = await createRequest(
         collection.id,
         {
           name: 'Move Test',
@@ -378,25 +339,23 @@ describe('集成测试 - Integration Tests', () => {
       );
       expect(request).toBeDefined();
 
-      // 移动请求到 Folder
-      const moved = moveRequest(collection.id, request.id, undefined, folder.id);
+      const moved = await moveRequest(collection.id, request!.id, undefined, folder!.id);
       expect(moved).toBe(true);
 
-      // 验证
-      const collections = getCollections();
+      const collections = await getCollections();
       const savedCollection = collections.find(c => c.id === collection.id);
-      expect(savedCollection!.requests).toHaveLength(0);
-      expect(savedCollection!.folders[0].requests).toHaveLength(1);
-      expect(savedCollection!.folders[0].requests[0].id).toBe(request.id);
+      expect(savedCollection!.folders[0].folders.length).toBeGreaterThan(0);
+      const targetFolder = savedCollection!.folders[0].folders.find(f => f.id === folder!.id);
+      expect(targetFolder?.requests).toHaveLength(1);
+      expect(targetFolder?.requests[0].id).toBe(request!.id);
     });
 
-    it('应能将 Request 从一个 Folder 移动到另一个 Folder', () => {
-      const collection = createCollection('Test');
-      const folder1 = createFolder(collection.id, 'Folder 1');
-      const folder2 = createFolder(collection.id, 'Folder 2');
+    it('应能将 Request 从一个 Folder 移动到另一个 Folder', async () => {
+      const collection = await createCollection('Test');
+      const folder1 = await createFolder(collection.id, 'Folder 1');
+      const folder2 = await createFolder(collection.id, 'Folder 2');
 
-      // 在 Folder1 中创建请求
-      const request = createRequest(
+      const request = await createRequest(
         collection.id,
         {
           name: 'Test Request',
@@ -405,43 +364,41 @@ describe('集成测试 - Integration Tests', () => {
           headers: [],
           params: [],
         },
-        folder1.id
+        folder1!.id
       );
 
-      // 移动到 Folder2
-      const moved = moveRequest(collection.id, request.id, folder1.id, folder2.id);
+      const moved = await moveRequest(collection.id, request!.id, folder1!.id, folder2!.id);
       expect(moved).toBe(true);
 
-      // 验证
-      const collections = getCollections();
+      const collections = await getCollections();
       const saved = collections.find(c => c.id === collection.id);
-      expect(saved!.folders[0].requests).toHaveLength(0);
-      expect(saved!.folders[1].requests).toHaveLength(1);
+      const folder1Data = saved!.folders[0].folders.find(f => f.id === folder1!.id);
+      const folder2Data = saved!.folders[0].folders.find(f => f.id === folder2!.id);
+      expect(folder1Data?.requests).toHaveLength(0);
+      expect(folder2Data?.requests).toHaveLength(1);
     });
   });
 
   describe('批量操作集成', () => {
-    it('应能批量创建请求并验证存储', () => {
-      const collection = createCollection('Batch Test');
+    it('应能批量创建请求并验证存储', async () => {
+      const collection = await createCollection('Batch Test');
       const requests = [];
 
-      // 批量创建 10 个请求
       for (let i = 0; i < 10; i++) {
-        const request = createRequest(collection.id, {
+        const request = await createRequest(collection.id, {
           name: `Request ${i}`,
           method: i % 2 === 0 ? 'GET' : 'POST',
           url: `https://api.example.com/resource${i}`,
           headers: [],
           params: [],
         });
-        requests.push(request);
+        requests.push(request!);
       }
 
       expect(requests).toHaveLength(10);
       expect(requests.every(r => r !== null)).toBe(true);
 
-      // 验证存储
-      const saved = getCollections();
+      const saved = await getCollections();
       expect(saved[0].requests).toHaveLength(10);
     });
 
@@ -453,7 +410,6 @@ describe('集成测试 - Integration Tests', () => {
         { key: 'VAR3', value: 'old3', type: 'string', enabled: true },
       ]);
 
-      // 批量更新 - 使用 setEnvironmentVariables
       const updated = setEnvironmentVariables(env.id, [
         { key: 'VAR1', value: 'new1', type: 'string', enabled: true },
         { key: 'VAR2', value: 'new2', type: 'string', enabled: true },
@@ -468,9 +424,9 @@ describe('集成测试 - Integration Tests', () => {
   });
 
   describe('错误处理和恢复', () => {
-    it('应在删除 Collection 后正确处理依赖数据', () => {
-      const collection = createCollection('To Delete');
-      createRequest(collection.id, {
+    it('应在删除 Collection 后正确处理依赖数据', async () => {
+      const collection = await createCollection('To Delete');
+      await createRequest(collection.id, {
         name: 'Request',
         method: 'GET',
         url: 'https://example.com',
@@ -478,48 +434,41 @@ describe('集成测试 - Integration Tests', () => {
         params: [],
       });
 
-      // 删除 Collection
-      const deleted = deleteCollection(collection.id);
+      const deleted = await deleteCollection(collection.id);
       expect(deleted).toBe(true);
 
-      // 验证所有数据被清除
-      const collections = getCollections();
+      const collections = await getCollections();
       expect(collections).toHaveLength(0);
     });
 
-    it('应在删除 Folder 后正确处理其中的请求', () => {
-      const collection = createCollection('Test');
-      const folder = createFolder(collection.id, 'To Delete');
+    it('应在删除 Folder 后正确处理其中的请求', async () => {
+      const collection = await createCollection('Test');
+      const folder = await createFolder(collection.id, 'To Delete');
       
-      // 在 Folder 中创建请求
-      createRequest(collection.id, {
+      await createRequest(collection.id, {
         name: 'Nested Request',
         method: 'POST',
         url: 'https://example.com',
         headers: [],
         params: [],
-      }, folder.id);
+      }, folder!.id);
 
-      // 删除 Folder
-      const deleted = deleteFolder(collection.id, folder.id);
+      const deleted = await deleteFolder(collection.id, folder!.id);
       expect(deleted).toBe(true);
 
-      // 验证 Folder 和请求都被删除
-      const saved = getCollections();
-      expect(saved[0].folders).toHaveLength(0);
+      const saved = await getCollections();
+      expect(saved[0].folders[0].folders).toHaveLength(0);
     });
   });
 
   describe('复杂场景集成', () => {
-    it('应能处理完整的 API 测试工作流', () => {
-      // 1. 创建 Collection 结构
-      const collection = createCollection('E-Commerce API');
-      const authFolder = createFolder(collection.id, 'Authentication');
-      const userFolder = createFolder(collection.id, 'User Management');
-      createFolder(collection.id, 'Orders');
+    it('应能处理完整的 API 测试工作流', async () => {
+      const collection = await createCollection('E-Commerce API');
+      const authFolder = await createFolder(collection.id, 'Authentication');
+      const userFolder = await createFolder(collection.id, 'User Management');
+      await createFolder(collection.id, 'Orders');
 
-      // 2. 在 Authentication 文件夹创建登录请求
-      createRequest(collection.id, {
+      await createRequest(collection.id, {
         name: 'Login',
         method: 'POST',
         url: '{{BASE_URL}}/auth/login',
@@ -529,10 +478,9 @@ describe('集成测试 - Integration Tests', () => {
           mode: 'json',
           content: JSON.stringify({ email: '{{EMAIL}}', password: '{{PASSWORD}}' }),
         },
-      }, authFolder.id);
+      }, authFolder!.id);
 
-      // 3. 创建获取用户信息的请求
-      createRequest(collection.id, {
+      await createRequest(collection.id, {
         name: 'Get User Profile',
         method: 'GET',
         url: '{{BASE_URL}}/users/{{USER_ID}}',
@@ -540,10 +488,9 @@ describe('集成测试 - Integration Tests', () => {
           { key: 'Authorization', value: 'Bearer {{AUTH_TOKEN}}', enabled: true },
         ],
         params: [],
-      }, userFolder.id);
+      }, userFolder!.id);
 
-      // 4. 创建环境并设置变量
-      const env = createEnvironment('Staging');
+      const env = await createEnvironment('Staging');
       setEnvironmentVariables(env.id, [
         { key: 'BASE_URL', value: 'https://staging.api.com', type: 'string', enabled: true },
         { key: 'EMAIL', value: 'test@example.com', type: 'string', enabled: true },
@@ -552,17 +499,15 @@ describe('集成测试 - Integration Tests', () => {
         { key: 'AUTH_TOKEN', value: 'jwt-token-xyz', type: 'secret', enabled: true },
       ]);
 
-      // 5. 验证完整结构
-      const saved = getCollections();
+      const saved = await getCollections();
       const savedCollection = saved.find(c => c.id === collection.id);
       
       expect(savedCollection).toBeDefined();
-      expect(savedCollection!.folders).toHaveLength(3);
+      expect(savedCollection!.folders[0].folders).toHaveLength(3);
       
-      const authFolderSaved = savedCollection!.folders.find(f => f.id === authFolder.id);
+      const authFolderSaved = savedCollection!.folders[0].folders.find(f => f.id === authFolder!.id);
       expect(authFolderSaved!.requests).toHaveLength(1);
 
-      // 6. 验证环境变量应用
       const request = authFolderSaved!.requests[0];
       const envWithVars = getEnvironmentById(env.id);
       const appliedUrl = applyEnvToUrl(request.url, envWithVars!.variables);

@@ -65,7 +65,7 @@ function App() {
   }, []);
 
   // 处理保存请求
-  const handleSaveRequest = useCallback((request: HttpRequest) => {
+  const handleSaveRequest = useCallback(async (request: HttpRequest) => {
     if (!selectedCollectionId) {
       message.error('Please select a collection first');
       return;
@@ -75,7 +75,7 @@ function App() {
 
     if (request.id) {
       // 更新现有请求
-      savedRequest = updateRequest(
+      savedRequest = await updateRequest(
         selectedCollectionId,
         request.id,
         {
@@ -90,7 +90,7 @@ function App() {
       );
     } else {
       // 创建新请求
-      savedRequest = createRequest(
+      savedRequest = await createRequest(
         selectedCollectionId,
         {
           name: request.name,

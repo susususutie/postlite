@@ -59,7 +59,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
   onCreateRequest,
   refreshKey = 0,
 }) => {
-  const [collections, setCollections] = useState<Collection[]>(getCollections());
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'createFolder'>('create');
   const [modalTarget, setModalTarget] = useState<{ collectionId?: string; folderId?: string }>({});
@@ -68,8 +68,9 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
   const [importContent, setImportContent] = useState('');
 
   // 刷新数据
-  const refresh = useCallback(() => {
-    setCollections(getCollections());
+  const refresh = useCallback(async () => {
+    const data = await getCollections();
+    setCollections(data);
   }, []);
 
   // 监听刷新键变化
@@ -164,13 +165,13 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
       const values = await form.validateFields();
 
       if (modalMode === 'create') {
-        createCollection(values.name, values.description);
+        await createCollection(values.name, values.description);
         message.success('Collection created');
       } else if (modalMode === 'edit' && modalTarget.collectionId) {
-        updateCollection(modalTarget.collectionId, values);
+        await updateCollection(modalTarget.collectionId, values);
         message.success('Collection updated');
       } else if (modalMode === 'createFolder' && modalTarget.collectionId) {
-        createFolder(modalTarget.collectionId, values.name, modalTarget.folderId);
+        await createFolder(modalTarget.collectionId, values.name, modalTarget.folderId);
         message.success('Folder created');
       }
 
@@ -182,23 +183,23 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
   };
 
   // 处理删除
-  const handleDelete = (type: 'collection' | 'folder', collectionId: string, folderId?: string) => {
+  const handleDelete = async (type: 'collection' | 'folder', collectionId: string, folderId?: string) => {
     if (type === 'collection') {
-      deleteCollection(collectionId);
+      await deleteCollection(collectionId);
       message.success('Collection deleted');
     } else if (folderId) {
-      deleteFolder(collectionId, folderId);
+      await deleteFolder(collectionId, folderId);
       message.success('Folder deleted');
     }
     refresh();
   };
 
   // 处理导入
-  const handleImport = () => {
+  const handleImport = async () => {
     try {
       const collection = autoImport(importContent);
       if (collection) {
-        importCollection(collection);
+        await importCollection(collection);
         message.success('Collection imported successfully');
         setIsImportModalOpen(false);
         setImportContent('');
@@ -298,8 +299,8 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
           icon: <DeleteOutlined />,
           label: 'Delete',
           danger: true,
-          onClick: () => {
-            deleteRequest(collectionId, requestId, folderId);
+          onClick: async () => {
+            await deleteRequest(collectionId, requestId, folderId);
             message.success('Request deleted');
             refresh();
           },

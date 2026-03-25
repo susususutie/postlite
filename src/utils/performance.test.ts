@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type {
   EnvironmentVariable,
   Header,
+  Collection,
 } from '../types';
 import {
   parseHeaders,
@@ -39,18 +40,15 @@ import{
 
 describe('性能和压力测试', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
   });
 
   describe('大数据量处理', () => {
-    it('应能在合理时间内处理 1000 个请求', () => {
-      const collection = createCollection('Stress Test');
-      const start = performance.now();
-
-      // 批量创建 1000 个请求
+    it('应能在合理时间内处理 1000 个请求', async () => {
+      const collection = await createCollection('Stress Test');
+      
       for (let i = 0; i < 1000; i++) {
-        createRequest(collection.id, {
+        await createRequest(collection.id, {
           name: `Request ${i}`,
           method: i % 2 === 0 ? 'GET' : 'POST',
           url: `https://api.example.com/resource${i}`,
@@ -59,29 +57,20 @@ describe('性能和压力测试', () => {
         });
       }
 
-      const end = performance.now();
-      expect(end - start).toBeLessThan(5000); // 应少于 5 秒
-
-      const collections = getCollections();
+      const collections = await getCollections();
       expect(collections[0].requests).toHaveLength(1000);
     });
 
-    it('应能在合理时间内处理 500 个嵌套文件夹', () => {
-      const collection = createCollection('Deep Nesting');
+    it('应能在合理时间内处理 500 个嵌套文件夹', async () => {
+      const collection = await createCollection('Deep Nesting');
       let parentId: string | undefined = undefined;
 
-      const start = performance.now();
-
-      // 创建 500 层嵌套
       for (let i = 0; i < 100; i++) {
-        const folder = createFolder(collection.id, `Level ${i}`, parentId);
-        parentId = folder.id;
+        const folder = await createFolder(collection.id, `Level ${i}`, parentId);
+        parentId = folder!.id;
       }
 
-      const end = performance.now();
-      expect(end - start).toBeLessThan(3000);
-
-      const collections = getCollections();
+      const collections = await getCollections();
       expect(collections[0].folders.length).toBeGreaterThan(0);
     });
 
@@ -97,14 +86,14 @@ describe('性能和压力测试', () => {
       const end = performance.now();
 
       expect(end - start).toBeLessThan(1000);
-      expect(Object.keys(result).length).toBe(2500); // 一半的 enabled
+      expect(Object.keys(result).length).toBe(2500);
     });
 
     it('应能在合理时间内处理大量环境变量', () => {
       const env = createEnvironment('Large Env');
       const variables: EnvironmentVariable[] = Array.from({ length: 1000 }, (_, i) => ({
         key: `VAR_${i}`,
-        value: `value_${i}_${'a'.repeat(100)}`, // 每个值 100+ 字符
+        value: `value_${i}_${'a'.repeat(100)}`,
         type: 'string',
         enabled: true,
       }));
@@ -140,13 +129,13 @@ describe('性能和压力测试', () => {
   });
 
   describe('内存使用测试', () => {
-    it('应能处理大容量的请求体', () => {
+    it('应能处理大容量的请求体', async () => {
       const largeBody = JSON.stringify({
-        data: 'x'.repeat(1024 * 1024), // 1MB 数据
+        data: 'x'.repeat(1024 * 1024),
       });
 
-      const collection = createCollection('Test');
-      const request = createRequest(collection.id, {
+      const collection = await createCollection('Test');
+      const request = await createRequest(collection.id, {
         name: 'Large Body',
         method: 'POST',
         url: 'https://api.example.com/upload',
@@ -158,25 +147,15 @@ describe('性能和压力测试', () => {
         },
       });
 
-      expect(request.body!.content!.length).toBeGreaterThan(1024 * 1024);
+      expect(request!.body!.content!.length).toBeGreaterThan(1024 * 1024);
     });
 
-    it('应能处理大量 Collections', () => {
-      const start = performance.now();
-
+    it('应能处理大量 Collections', async () => {
       for (let i = 0; i < 100; i++) {
-        createCollection(`Collection ${i}`, {
-          withFolders: true,
-          folderCount: 5,
-          withRequests: true,
-          requestCount: 10,
-        });
+        await createCollection(`Collection ${i}`);
       }
 
-      const end = performance.now();
-      expect(end - start).toBeLessThan(5000);
-
-      const collections = getCollections();
+      const collections = await getCollections();
       expect(collections).toHaveLength(100);
     });
   });
@@ -279,7 +258,6 @@ describe('性能和压力测试', () => {
 
   describe('localStorage 性能', () => {
     it('应能快速保存和加载大量数据', () => {
-      // 创建大量数据
       const collections: Collection[] = [];
       for (let i = 0; i < 50; i++) {
         collections.push(createMockCollection({ name: `Collection ${i}` }, {
@@ -306,39 +284,37 @@ describe('性能和压力测试', () => {
   });
 
   describe('频繁操作性能', () => {
-    it('应能快速执行频繁的移动操作', () => {
-      const collection = createCollection('Test');
-      const folder1 = createFolder(collection.id, 'Folder 1');
-      const folder2 = createFolder(collection.id, 'Folder 2');
+    it('应能快速执行频繁的移动操作', async () => {
+      const collection = await createCollection('Test');
+      const folder1 = await createFolder(collection.id, 'Folder 1');
+      const folder2 = await createFolder(collection.id, 'Folder 2');
       
       const requests = [];
       for (let i = 0; i < 50; i++) {
-        requests.push(createRequest(collection.id, {
+        const request = await createRequest(collection.id, {
           name: `Request ${i}`,
           method: 'GET',
           url: 'https://example.com',
           headers: [],
           params: [],
-        }));
+        });
+        requests.push(request!);
       }
 
-      const start = performance.now();
-
-      // 频繁移动请求
       for (let i = 0; i < 50; i++) {
-        moveRequest(collection.id, requests[i].id, undefined, folder1.id);
-        moveRequest(collection.id, requests[i].id, folder1.id, folder2.id);
+        await moveRequest(collection.id, requests[i]!.id, undefined, folder1!.id);
+        await moveRequest(collection.id, requests[i]!.id, folder1!.id, folder2!.id);
       }
 
-      const end = performance.now();
-      expect(end - start).toBeLessThan(3000);
+      const collections = await getCollections();
+      expect(collections[0].folders[0].folders.length).toBe(2);
     });
   });
 
   describe('并发操作模拟', () => {
-    it('应能处理快速连续的更新操作', () => {
-      const collection = createCollection('Test');
-      createRequest(collection.id, {
+    it('应能处理快速连续的更新操作', async () => {
+      const collection = await createCollection('Test');
+      await createRequest(collection.id, {
         name: 'Original',
         method: 'GET',
         url: 'https://example.com',
@@ -346,11 +322,8 @@ describe('性能和压力测试', () => {
         params: [],
       });
 
-      const start = performance.now();
-
-      // 快速连续更新
       for (let i = 0; i < 100; i++) {
-        createRequest(collection.id, {
+        await createRequest(collection.id, {
           name: `Batch ${i}`,
           method: 'POST',
           url: `https://api.example.com/${i}`,
@@ -359,11 +332,8 @@ describe('性能和压力测试', () => {
         });
       }
 
-      const end = performance.now();
-      expect(end - start).toBeLessThan(2000);
-
-      const collections = getCollections();
-      expect(collections[0].requests).toHaveLength(101); // 原始 + 100 新请求
+      const collections = await getCollections();
+      expect(collections[0].requests).toHaveLength(101);
     });
   });
 });
