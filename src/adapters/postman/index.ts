@@ -208,6 +208,7 @@ function parseUrlEncoded(content: string): PostmanKeyValue[] {
 interface PostmanCollection {
   info: { _postman_id: string; name: string; description?: string; schema: string };
   item: PostmanItem[];
+  variable?: { key: string; value?: string; type?: string }[];
 }
 
 interface PostmanItem {

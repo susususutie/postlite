@@ -131,7 +131,8 @@ function processItemForExport(item: ItemIR, paths: Record<string, SwaggerPathIte
   if (!item.url) return;
 
   try {
-    const urlObj = new URL(item.url);
+    const urlString = typeof item.url === 'string' ? item.url : item.url.raw;
+    const urlObj = new URL(urlString);
     const path = urlObj.pathname || '/';
 
     if (!paths[path]) {

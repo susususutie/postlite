@@ -21,6 +21,7 @@ import {
   ImportOutlined,
   ExportOutlined,
   FolderAddOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import type { Collection, Folder, HttpRequest } from '../types';
 import {
@@ -147,7 +148,11 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
   const openEditModal = (collection: Collection) => {
     setModalMode('edit');
     setModalTarget({ collectionId: collection.id });
-    form.setFieldsValue({ name: collection.name, description: collection.description });
+    form.setFieldsValue({
+      name: collection.name,
+      description: collection.description,
+      defaultBaseUrl: collection.defaultBaseUrl,
+    });
     setIsModalOpen(true);
   };
 
@@ -165,10 +170,14 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
       const values = await form.validateFields();
 
       if (modalMode === 'create') {
-        await createCollection(values.name, values.description);
+        await createCollection(values.name, values.description, values.defaultBaseUrl);
         message.success('Collection created');
       } else if (modalMode === 'edit' && modalTarget.collectionId) {
-        await updateCollection(modalTarget.collectionId, values);
+        await updateCollection(modalTarget.collectionId, {
+          name: values.name,
+          description: values.description,
+          defaultBaseUrl: values.defaultBaseUrl,
+        });
         message.success('Collection updated');
       } else if (modalMode === 'createFolder' && modalTarget.collectionId) {
         await createFolder(modalTarget.collectionId, values.name, modalTarget.folderId);
@@ -312,13 +321,21 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
 
   // 自定义标题渲染
   const titleRender = (nodeData: TreeNode) => {
+    const isCollectionWithBaseUrl = nodeData.type === 'collection' &&
+      (nodeData.data as Collection)?.defaultBaseUrl;
+
     return (
       <Dropdown
         menu={{ items: getNodeMenuItems(nodeData) }}
         trigger={['contextMenu']}
       >
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-          <span>{nodeData.title}</span>
+          <Space>
+            <span>{nodeData.title}</span>
+            {isCollectionWithBaseUrl && (
+              <LinkOutlined style={{ color: '#52c41a', fontSize: 12 }} title="已设置默认 Base URL" />
+            )}
+          </Space>
           <Dropdown
             menu={{ items: getNodeMenuItems(nodeData) }}
             trigger={['click']}
@@ -385,9 +402,18 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
             <Input />
           </Form.Item>
           {modalMode !== 'createFolder' && (
-            <Form.Item name="description" label="Description">
-              <Input.TextArea rows={3} />
-            </Form.Item>
+            <>
+              <Form.Item name="description" label="Description">
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <Form.Item
+                name="defaultBaseUrl"
+                label="Default Base URL"
+                tooltip="创建新请求时的默认 URL 前缀，可使用 {{variable}} 语法引用环境变量"
+              >
+                <Input placeholder="https://api.example.com 或 {{baseURL}}" />
+              </Form.Item>
+            </>
           )}
         </Form>
       </Modal>

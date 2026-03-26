@@ -11,6 +11,7 @@ import {
   Card,
   Tag,
   Dropdown,
+  Tooltip,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -21,6 +22,9 @@ import {
   SettingOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
+  StarOutlined,
+  GlobalOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import type { Environment, EnvironmentVariable } from '../types';
 import {
@@ -55,6 +59,40 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
   const [editingEnv, setEditingEnv] = useState<Environment | null>(null);
   const [form] = Form.useForm();
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+
+  // 推荐变量列表
+  const recommendedVars = [
+    { key: 'baseURL', description: '主服务地址', example: 'https://api.example.com', icon: <GlobalOutlined /> },
+    { key: 'authURL', description: '认证服务地址', example: 'https://auth.example.com', icon: <GlobalOutlined /> },
+    { key: 'fileURL', description: '文件服务地址', example: 'https://files.example.com', icon: <GlobalOutlined /> },
+    { key: 'apiKey', description: 'API 密钥', example: 'your-api-key-here', icon: <KeyOutlined />, type: 'secret' as const },
+    { key: 'authToken', description: '认证令牌', example: 'Bearer xxx', icon: <KeyOutlined />, type: 'secret' as const },
+    { key: 'userId', description: '用户 ID', example: '12345', icon: <StarOutlined /> },
+    { key: 'orgId', description: '组织 ID', example: 'org-xxx', icon: <StarOutlined /> },
+  ];
+
+  // 添加推荐变量
+  const addRecommendedVariable = (varConfig: typeof recommendedVars[0]) => {
+    if (!currentEnv) return;
+
+    // 检查是否已存在
+    const exists = currentEnv.variables.some(v => v.key === varConfig.key);
+    if (exists) {
+      message.warning(`变量 ${varConfig.key} 已存在`);
+      return;
+    }
+
+    const newVar: EnvironmentVariable = {
+      key: varConfig.key,
+      value: '',
+      type: varConfig.type || 'string',
+      enabled: true,
+    };
+
+    addEnvironmentVariable(currentEnv.id, newVar);
+    refresh();
+    message.success(`已添加变量 ${varConfig.key}`);
+  };
 
   // 刷新数据
   const refresh = useCallback(() => {
@@ -237,11 +275,52 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
       </Space>
 
       {currentEnv ? (
-        <Card
-          title={`Variables: ${currentEnv.name}`}
-          size="small"
-          style={{ flex: 1, overflow: 'auto' }}
-        >
+        <>
+          {/* 推荐变量区域 */}
+          <Card
+            title={
+              <Space>
+                <StarOutlined style={{ color: '#faad14' }} />
+                <span>推荐变量</span>
+              </Space>
+            }
+            size="small"
+            style={{ marginBottom: 16 }}
+          >
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {recommendedVars.map(varConfig => {
+                const isAdded = currentEnv.variables.some(v => v.key === varConfig.key);
+                return (
+                  <Tooltip
+                    key={varConfig.key}
+                    title={`${varConfig.description}\n示例: ${varConfig.example}`}
+                  >
+                    <Tag
+                      icon={varConfig.icon}
+                      color={isAdded ? 'default' : 'blue'}
+                      style={{
+                        cursor: isAdded ? 'not-allowed' : 'pointer',
+                        opacity: isAdded ? 0.5 : 1,
+                      }}
+                      onClick={() => !isAdded && addRecommendedVariable(varConfig)}
+                    >
+                      {varConfig.key}
+                      {isAdded && ' ✓'}
+                    </Tag>
+                  </Tooltip>
+                );
+              })}
+            </div>
+            <p style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
+              点击快速添加常用变量，可在请求中使用 {'{{variableName}}'} 引用
+            </p>
+          </Card>
+
+          <Card
+            title={`Variables: ${currentEnv.name}`}
+            size="small"
+            style={{ flex: 1, overflow: 'auto' }}
+          >
           {currentEnv.variables.map((variable, index) => {
             const isSecret = variable.type === 'secret';
             const showValue = showSecrets[variable.key] || !isSecret;
@@ -323,6 +402,7 @@ export const EnvironmentManager: React.FC<EnvironmentManagerProps> = ({ onChange
             Use {'{{variableName}}'} in requests to substitute values
           </p>
         </Card>
+        </>
       ) : (
         <Card style={{ flex: 1, textAlign: 'center', padding: 40 }}>
           <p>No environment selected</p>

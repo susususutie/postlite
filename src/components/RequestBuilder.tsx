@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Input,
   Select,
@@ -16,14 +16,26 @@ import {
   Empty,
   Typography,
   message,
+  Dropdown,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   SendOutlined,
   PlusOutlined,
   DeleteOutlined,
   SaveOutlined,
   CopyOutlined,
+  DownOutlined,
+  GlobalOutlined,
+  WarningOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
+import {
+  resolveVariables,
+  StaticVariableResolver,
+  extractUnresolvedVariables,
+} from '../utils/variables';
+import { normalizeUrl, isValidUrl } from '../utils/url';
 import type { HttpRequest, HttpResponse, HttpMethod, Header, Param, RequestBody } from '../types';
 import { sendRequest } from '../services/http';
 import { getCurrentEnvironment } from '../services/environment';
@@ -31,7 +43,6 @@ import { applyEnvToUrl, applyEnvToHeaders, applyEnvToBody } from '../utils/envir
 import { JsonEditor } from './JsonEditor';
 
 const { Option } = Select;
-const { TabPane } = Tabs;
 const { Text } = Typography;
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
@@ -51,12 +62,11 @@ interface RequestBuilderProps {
   onSave?: (request: HttpRequest) => void;
   collectionId?: string;
   folderId?: string;
+  collection?: { defaultBaseUrl?: string };
 }
 
-export const RequestBuilder: React.FC<RequestBuilderProps> = ({
-  initialRequest,
-  onSave,
-}) => {
+export const RequestBuilder: React.FC<RequestBuilderProps> = (props) => {
+  const { initialRequest, onSave, collection } = props;
   // 请求状态
   const [method, setMethod] = useState<HttpMethod>(initialRequest?.method || 'GET');
   const [url, setUrl] = useState(initialRequest?.url || '');
@@ -69,6 +79,94 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
   const [response, setResponse] = useState<HttpResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 获取当前环境变量
+  const envVariables = useMemo(() => {
+    const currentEnv = getCurrentEnvironment();
+    return currentEnv?.variables || [];
+  }, []);
+
+  // 计算 URL 预览
+  const urlPreview = useMemo(() => {
+    if (!url) {
+      return { url: '', status: 'empty' as const };
+    }
+
+    try {
+      // 1. 弱拼接 defaultBaseUrl
+      let rawUrl = url;
+      if (collection?.defaultBaseUrl &&
+          !rawUrl.includes('://') &&
+          !rawUrl.includes('{{') &&
+          !rawUrl.startsWith('/')) {
+        rawUrl = `${collection.defaultBaseUrl}${rawUrl}`;
+      }
+
+      // 2. 变量解析
+      const resolver = new StaticVariableResolver(envVariables);
+      const resolved = resolveVariables(rawUrl, resolver);
+
+      // 3. URL 规范化
+      const normalized = normalizeUrl(resolved);
+
+      // 4. 检查未解析变量
+      const unresolved = extractUnresolvedVariables(normalized);
+      if (unresolved.length > 0) {
+        return {
+          url: normalized,
+          status: 'warning' as const,
+          unresolvedVars: unresolved,
+        };
+      }
+
+      // 5. 校验 URL 合法性
+      if (!isValidUrl(normalized)) {
+        return { url: normalized, status: 'error' as const };
+      }
+
+      return { url: normalized, status: 'valid' as const };
+    } catch (e) {
+      return {
+        url: url,
+        status: 'error' as const,
+        error: (e as Error).message,
+      };
+    }
+  }, [url, envVariables, collection?.defaultBaseUrl]);
+
+  // 插入变量到 URL
+  const insertVariable = useCallback((varName: string) => {
+    const variable = `{{${varName}}}`;
+    // 在光标位置插入或追加到末尾
+    const input = document.querySelector('input[placeholder*="Enter URL"]') as HTMLInputElement;
+    if (input) {
+      const start = input.selectionStart || url.length;
+      const end = input.selectionEnd || url.length;
+      const newUrl = url.substring(0, start) + variable + url.substring(end);
+      setUrl(newUrl);
+      // 恢复焦点
+      setTimeout(() => {
+        input.focus();
+        const newCursorPos = start + variable.length;
+        input.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    } else {
+      setUrl(url + variable);
+    }
+  }, [url]);
+
+  // 构建变量菜单项
+  const variableMenuItems: MenuProps['items'] = useMemo(() => {
+    const enabledVars = envVariables.filter(v => v.enabled);
+    if (enabledVars.length === 0) {
+      return [{ key: 'empty', label: '无可用变量', disabled: true }];
+    }
+    return enabledVars.map(v => ({
+      key: v.key,
+      label: `{{${v.key}}}`,
+      onClick: () => insertVariable(v.key),
+    }));
+  }, [envVariables, insertVariable]);
 
   // 更新初始请求
   useEffect(() => {
@@ -317,109 +415,190 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
       </Row>
 
       {/* URL 和方法栏 */}
-      <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
-        <Col>
-          <Select
-            value={method}
-            onChange={setMethod}
-            style={{ width: 120 }}
-          >
-            {HTTP_METHODS.map((m) => (
-              <Option key={m} value={m}>
-                <Tag color={METHOD_COLORS[m]} style={{ marginRight: 0 }}>
-                  {m}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={[8, 8]} style={{ marginBottom: 8 }}>
+          <Col>
+            <Select
+              value={method}
+              onChange={setMethod}
+              style={{ width: 120 }}
+            >
+              {HTTP_METHODS.map((m) => (
+                <Option key={m} value={m}>
+                  <Tag color={METHOD_COLORS[m]} style={{ marginRight: 0 }}>
+                    {m}
+                  </Tag>
+                </Option>
+              ))}
+            </Select>
+          </Col>
+          <Col flex="auto">
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Enter URL or paste cURL command (e.g., {{baseURL}}/api/users)"
+              onPressEnter={handleSend}
+            />
+          </Col>
+          <Col>
+            <Dropdown menu={{ items: variableMenuItems }} placement="bottomRight">
+              <Button icon={<DownOutlined />}>
+                插入变量
+              </Button>
+            </Dropdown>
+          </Col>
+          <Col>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={handleSend}
+              loading={loading}
+            >
+              Send
+            </Button>
+          </Col>
+        </Row>
+
+        {/* URL 预览区域 */}
+        <div style={{ padding: '8px 0', borderTop: '1px solid #f0f0f0' }}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={4}>
+            <Space>
+              <Text type="secondary" style={{ fontSize: 12 }}>实际请求 URL:</Text>
+              {urlPreview.status === 'valid' && (
+                <Tag icon={<CheckCircleOutlined />} color="success" style={{ fontSize: 11 }}>
+                  有效
                 </Tag>
-              </Option>
-            ))}
-          </Select>
-        </Col>
-        <Col flex="auto">
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Enter URL or paste cURL command"
-            onPressEnter={handleSend}
-          />
-        </Col>
-        <Col>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleSend}
-            loading={loading}
-          >
-            Send
-          </Button>
-        </Col>
-      </Row>
+              )}
+              {urlPreview.status === 'warning' && (
+                <Tag icon={<WarningOutlined />} color="warning" style={{ fontSize: 11 }}>
+                  未解析变量
+                </Tag>
+              )}
+              {urlPreview.status === 'error' && (
+                <Tag icon={<WarningOutlined />} color="error" style={{ fontSize: 11 }}>
+                  无效 URL
+                </Tag>
+              )}
+            </Space>
+            <Text
+              code
+              style={{
+                fontSize: 12,
+                color: urlPreview.status === 'error' ? '#ff4d4f' :
+                       urlPreview.status === 'warning' ? '#faad14' : '#52c41a',
+                wordBreak: 'break-all',
+                display: 'block',
+                padding: 4,
+                background: '#f6ffed',
+                borderRadius: 4,
+              }}
+            >
+              {urlPreview.url || '等待输入...'}
+            </Text>
+            {urlPreview.status === 'warning' && urlPreview.unresolvedVars && (
+              <Text type="warning" style={{ fontSize: 11 }}>
+                未定义变量: {urlPreview.unresolvedVars.join(', ')} - 请先在环境管理中添加
+              </Text>
+            )}
+            {urlPreview.error && (
+              <Text type="danger" style={{ fontSize: 11 }}>
+                {urlPreview.error}
+              </Text>
+            )}
+            {collection?.defaultBaseUrl && (
+              <Space>
+                <GlobalOutlined style={{ color: '#52c41a', fontSize: 12 }} />
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  使用 Collection 默认 Base URL: {collection.defaultBaseUrl}
+                </Text>
+              </Space>
+            )}
+          </Space>
+        </div>
+      </Card>
 
       {/* 请求配置标签页 */}
       <Card style={{ marginBottom: 16, flex: 1, minHeight: 200 }}>
-        <Tabs defaultActiveKey="params">
-          <TabPane tab={`Params (${params.filter(p => p.enabled && p.key).length})`} key="params">
-            <Table
-              dataSource={params.map((p, i) => ({ ...p, key: i }))}
-              columns={paramColumns}
-              pagination={false}
-              size="small"
-              footer={() => (
-                <Button
-                  type="dashed"
-                  block
-                  icon={<PlusOutlined />}
-                  onClick={addParam}
+        <Tabs
+          defaultActiveKey="params"
+          items={[
+            {
+              key: 'params',
+              label: `Params (${params.filter(p => p.enabled && p.key).length})`,
+              children: (
+                <Table
+                  dataSource={params.map((p, i) => ({ ...p, key: i }))}
+                  columns={paramColumns}
+                  pagination={false}
                   size="small"
-                >
-                  Add Parameter
-                </Button>
-              )}
-            />
-          </TabPane>
-          <TabPane tab={`Headers (${headers.filter(h => h.enabled && h.key).length})`} key="headers">
-            <Table
-              dataSource={headers.map((h, i) => ({ ...h, key: i }))}
-              columns={headerColumns}
-              pagination={false}
-              size="small"
-              footer={() => (
-                <Button
-                  type="dashed"
-                  block
-                  icon={<PlusOutlined />}
-                  onClick={addHeader}
+                  footer={() => (
+                    <Button
+                      type="dashed"
+                      block
+                      icon={<PlusOutlined />}
+                      onClick={addParam}
+                      size="small"
+                    >
+                      Add Parameter
+                    </Button>
+                  )}
+                />
+              ),
+            },
+            {
+              key: 'headers',
+              label: `Headers (${headers.filter(h => h.enabled && h.key).length})`,
+              children: (
+                <Table
+                  dataSource={headers.map((h, i) => ({ ...h, key: i }))}
+                  columns={headerColumns}
+                  pagination={false}
                   size="small"
-                >
-                  Add Header
-                </Button>
-              )}
-            />
-          </TabPane>
-          <TabPane tab="Body" key="body">
-            <Row gutter={[16, 16]}>
-              <Col span={24}>
-                <Select
-                  value={body?.mode || 'none'}
-                  onChange={(mode) => setBody(mode === 'none' ? undefined : { mode, content: body?.content || '' })}
-                  style={{ width: 150, marginBottom: 16 }}
-                >
-                  <Option value="none">None</Option>
-                  <Option value="json">JSON</Option>
-                  <Option value="text">Text</Option>
-                  <Option value="urlencoded">x-www-form-urlencoded</Option>
-                </Select>
-              </Col>
-              {body?.mode && body.mode !== 'none' && (
-                <Col span={24}>
-                  <JsonEditor
-                    value={body.content || ''}
-                    onChange={(value) => setBody({ ...body, content: value })}
-                    language={body.mode === 'json' ? 'json' : 'text'}
-                  />
-                </Col>
-              )}
-            </Row>
-          </TabPane>
-        </Tabs>
+                  footer={() => (
+                    <Button
+                      type="dashed"
+                      block
+                      icon={<PlusOutlined />}
+                      onClick={addHeader}
+                      size="small"
+                    >
+                      Add Header
+                    </Button>
+                  )}
+                />
+              ),
+            },
+            {
+              key: 'body',
+              label: 'Body',
+              children: (
+                <Row gutter={[16, 16]}>
+                  <Col span={24}>
+                    <Select
+                      value={body?.mode || 'none'}
+                      onChange={(mode) => setBody(mode === 'none' ? undefined : { mode, content: body?.content || '' })}
+                      style={{ width: 150, marginBottom: 16 }}
+                    >
+                      <Option value="none">None</Option>
+                      <Option value="json">JSON</Option>
+                      <Option value="text">Text</Option>
+                      <Option value="urlencoded">x-www-form-urlencoded</Option>
+                    </Select>
+                  </Col>
+                  {body?.mode && body.mode !== 'none' && (
+                    <Col span={24}>
+                      <JsonEditor
+                        value={body.content || ''}
+                        onChange={(value) => setBody({ ...body, content: value })}
+                        language={body.mode === 'json' ? 'json' : 'text'}
+                      />
+                    </Col>
+                  )}
+                </Row>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       {/* 响应区域 */}
@@ -468,31 +647,42 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
         )}
 
         {response && (
-          <Tabs defaultActiveKey="body">
-            <TabPane tab="Body" key="body">
-              <JsonEditor
-                value={typeof response.data === 'string'
-                  ? response.data
-                  : JSON.stringify(response.data, null, 2)}
-                language="json"
-                readOnly
-              />
-            </TabPane>
-            <TabPane tab="Headers" key="headers">
-              <Table
-                dataSource={Object.entries(response.headers).map(([key, value]) => ({
-                  key,
-                  value,
-                }))}
-                columns={[
-                  { title: 'Name', dataIndex: 'key', width: '40%' },
-                  { title: 'Value', dataIndex: 'value' },
-                ]}
-                pagination={false}
-                size="small"
-              />
-            </TabPane>
-          </Tabs>
+          <Tabs
+            defaultActiveKey="body"
+            items={[
+              {
+                key: 'body',
+                label: 'Body',
+                children: (
+                  <JsonEditor
+                    value={typeof response.data === 'string'
+                      ? response.data
+                      : JSON.stringify(response.data, null, 2)}
+                    language="json"
+                    readOnly
+                  />
+                ),
+              },
+              {
+                key: 'headers',
+                label: 'Headers',
+                children: (
+                  <Table
+                    dataSource={Object.entries(response.headers).map(([key, value]) => ({
+                      key,
+                      value,
+                    }))}
+                    columns={[
+                      { title: 'Name', dataIndex: 'key', width: '40%' },
+                      { title: 'Value', dataIndex: 'value' },
+                    ]}
+                    pagination={false}
+                    size="small"
+                  />
+                ),
+              },
+            ]}
+          />
         )}
       </Card>
     </div>
