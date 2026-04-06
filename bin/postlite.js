@@ -5,11 +5,15 @@
  * Usage: npx postlite [port]
  */
 
-const http = require('http');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
+import http from 'http';
+import https from 'https';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 禁止的主机和 IP 段
 const BLOCKED_HOSTS = [
