@@ -1,6 +1,13 @@
 import '@testing-library/jest-dom';
-import { vi, afterEach } from 'vitest';
+import { vi, afterEach, beforeAll } from 'vitest';
 import { cleanup } from '@testing-library/react';
+
+// Ensure jsdom has a body element
+beforeAll(() => {
+  if (!document.body) {
+    document.body = document.createElement('body');
+  }
+});
 
 // Mock localStorage
 const localStorageMock = (() => {
