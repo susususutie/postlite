@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -42,18 +43,24 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+class ResizeObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 
 // Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+class IntersectionObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+  takeRecords = vi.fn(() => []);
+  root: Document | Element | null = null;
+  rootMargin: string = '';
+  thresholds: readonly number[] = [];
+}
+global.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -81,27 +88,9 @@ Object.defineProperty(navigator, 'serviceWorker', {
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = vi.fn();
 
-// Mock document.createElement for download
-document.createElement = vi.fn((tagName: string) => {
-  const element = {
-    tagName,
-    href: '',
-    download: '',
-    style: {},
-    click: vi.fn(),
-    setAttribute: vi.fn(),
-    getAttribute: vi.fn(),
-    appendChild: vi.fn(),
-    removeChild: vi.fn(),
-  };
-  return element as HTMLElement;
-});
-
-document.body.appendChild = vi.fn();
-document.body.removeChild = vi.fn();
-
 // Clean up after each test
 afterEach(() => {
+  cleanup();
   vi.clearAllMocks();
   localStorageMock.clear();
 });

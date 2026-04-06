@@ -3,7 +3,9 @@ import {
   Layout,
   theme,
   message,
+  Button,
 } from 'antd';
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import type { HttpRequest } from './types';
 import { CollectionTree } from './components/CollectionTree';
 import { RequestBuilder } from './components/RequestBuilder';
@@ -12,6 +14,8 @@ import { createRequest, updateRequest } from './services/collection';
 import './App.css';
 
 const { Header, Sider, Content } = Layout;
+
+type SidebarMode = 'expanded' | 'icon' | 'hidden';
 
 // 注册 Service Worker
 const registerServiceWorker = async () => {
@@ -30,17 +34,64 @@ function App() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | undefined>(undefined);
   const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
   const [envCollapsed, setEnvCollapsed] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() => {
+    const width = window.innerWidth;
+    if (width >= 1020) return 'expanded';
+    if (width >= 768) return 'icon';
+    return 'hidden';
+  });
 
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
+  // 根据窗口宽度自动切换 sidebarMode
+  const updateSidebarModeByWidth = useCallback((width: number) => {
+    if (width >= 1020) {
+      setSidebarMode('expanded');
+    } else if (width >= 768) {
+      setSidebarMode('icon');
+    } else {
+      setSidebarMode('hidden');
+    }
+  }, []);
+
+  // 监听窗口 resize 事件
+  useEffect(() => {
+    const handleResize = () => {
+      updateSidebarModeByWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateSidebarModeByWidth]);
+
   // 注册 Service Worker
   useEffect(() => {
     registerServiceWorker();
   }, []);
+
+  // 手动切换 sidebarMode
+  const toggleSidebar = useCallback(() => {
+    setSidebarMode((prev) => {
+      if (prev === 'expanded') return 'icon';
+      if (prev === 'icon') return 'hidden';
+      return 'expanded';
+    });
+  }, []);
+
+  // 根据 sidebarMode 设置 .ant-layout-sider-children 的样式
+  useEffect(() => {
+    const siderChildren = document.querySelector('.ant-layout-sider .ant-layout-sider-children') as HTMLElement | null;
+    if (siderChildren) {
+      if (sidebarMode === 'icon') {
+        siderChildren.style.overflowX = 'hidden';
+      } else {
+        siderChildren.style.overflowX = '';
+      }
+    }
+  }, [sidebarMode]);
 
   // 处理选择请求
   const handleSelectRequest = useCallback((request: HttpRequest, collectionId: string, folderId?: string) => {
@@ -116,6 +167,13 @@ function App() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ display: 'flex', alignItems: 'center', background: '#001529', padding: '0 24px' }}>
+        <Button
+          type="text"
+          icon={sidebarMode === 'expanded' ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+          onClick={toggleSidebar}
+          aria-label="toggle-sidebar"
+          style={{ color: 'white', marginRight: 16 }}
+        />
         <h1 style={{ color: 'white', margin: 0, fontSize: 20 }}>Postlite</h1>
         <span style={{ color: 'rgba(255,255,255,0.65)', marginLeft: 16 }}>
           Lightweight API Testing Tool
@@ -128,18 +186,29 @@ function App() {
           width={300}
           theme="light"
           collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
+          collapsed={sidebarMode !== 'expanded'}
+          collapsedWidth={sidebarMode === 'icon' ? 56 : 0}
+          className={sidebarMode === 'icon' ? 'sider-icon-mode' : undefined}
           style={{
             background: colorBgContainer,
             borderRight: '1px solid #f0f0f0',
+            display: sidebarMode === 'hidden' ? 'none' : undefined,
           }}
         >
-          <div style={{ padding: 16, height: '100%', overflow: 'auto' }}>
+          <div style={{
+            padding: sidebarMode === 'icon' ? '16px 0' : 16,
+            height: '100%',
+            overflow: sidebarMode === 'icon' ? 'hidden' : 'auto',
+            overflowX: sidebarMode === 'icon' ? 'hidden' : undefined,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: sidebarMode === 'icon' ? 'center' : undefined,
+          }}>
             <CollectionTree
               onSelectRequest={handleSelectRequest}
               onCreateRequest={handleCreateRequest}
               refreshKey={refreshKey}
+              sidebarMode={sidebarMode}
             />
           </div>
         </Sider>

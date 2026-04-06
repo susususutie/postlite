@@ -36,6 +36,8 @@ import {
 import { autoImport } from '../utils/importers';
 import { exportCollection, downloadFile } from '../utils/exporters';
 
+type SidebarMode = 'expanded' | 'icon' | 'hidden';
+
 const { DirectoryTree } = Tree;
 
 interface TreeNode {
@@ -52,12 +54,14 @@ interface CollectionTreeProps {
   onSelectRequest?: (request: HttpRequest, collectionId: string, folderId?: string) => void;
   onCreateRequest?: (collectionId: string, folderId?: string) => void;
   refreshKey?: number;
+  sidebarMode?: SidebarMode;
 }
 
 export const CollectionTree: React.FC<CollectionTreeProps> = ({
   onSelectRequest,
   onCreateRequest,
   refreshKey = 0,
+  sidebarMode = 'expanded',
 }) => {
   const [collections, setCollections] = useState<Collection[]>(getCollections());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -336,8 +340,49 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
 
   const treeData = buildTreeData(collections);
 
+  // Icon 模式：只显示垂直图标按钮
+  if (sidebarMode === 'icon') {
+    return (
+      <div
+        data-testid="collection-tree"
+        data-mode={sidebarMode}
+        style={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '16px 0',
+          overflowX: 'hidden',
+        }}
+      >
+        <Tooltip title="Import">
+          <Button
+            icon={<ImportOutlined />}
+            size="small"
+            aria-label="Import"
+            onClick={() => setIsImportModalOpen(true)}
+            style={{ marginBottom: 8 }}
+          />
+        </Tooltip>
+        <Tooltip title="New Collection">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            size="small"
+            aria-label="New Collection"
+            onClick={openCreateModal}
+          />
+        </Tooltip>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div
+      data-testid="collection-tree"
+      data-mode={sidebarMode}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <Space style={{ marginBottom: 16, justifyContent: 'space-between', width: '100%' }}>
         <h3 style={{ margin: 0 }}>Collections</h3>
         <Space>
@@ -345,6 +390,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
             <Button
               icon={<ImportOutlined />}
               size="small"
+              aria-label="Import"
               onClick={() => setIsImportModalOpen(true)}
             />
           </Tooltip>
@@ -353,6 +399,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
               type="primary"
               icon={<PlusOutlined />}
               size="small"
+              aria-label="New Collection"
               onClick={openCreateModal}
             />
           </Tooltip>
