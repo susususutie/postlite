@@ -1,6 +1,13 @@
 import '@testing-library/jest-dom';
-import { vi, afterEach } from 'vitest';
+import { vi, afterEach, beforeAll } from 'vitest';
 import { cleanup } from '@testing-library/react';
+
+// Ensure jsdom has a body element
+beforeAll(() => {
+  if (!document.body) {
+    document.body = document.createElement('body');
+  }
+});
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -88,24 +95,6 @@ Object.defineProperty(navigator, 'serviceWorker', {
 global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = vi.fn();
 
-// Mock document.createElement for download
-document.createElement = vi.fn((tagName: string) => {
-  const element = {
-    tagName,
-    href: '',
-    download: '',
-    style: {},
-    click: vi.fn(),
-    setAttribute: vi.fn(),
-    getAttribute: vi.fn(),
-    appendChild: vi.fn(),
-    removeChild: vi.fn(),
-  };
-  return element as unknown as HTMLElement;
-});
-
-document.body.appendChild = vi.fn();
-document.body.removeChild = vi.fn();
 
 // Mock IndexedDB with proper async handling
 const indexedDBStores: Record<string, Record<string, unknown>[]> = {
