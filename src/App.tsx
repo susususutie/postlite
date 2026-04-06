@@ -186,6 +186,7 @@ function App() {
           width={300}
           theme="light"
           collapsible
+          trigger={null}
           collapsed={sidebarMode !== 'expanded'}
           collapsedWidth={sidebarMode === 'icon' ? 56 : 0}
           className={sidebarMode === 'icon' ? 'sider-icon-mode' : undefined}
