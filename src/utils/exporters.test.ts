@@ -480,20 +480,17 @@ describe('Exporters', () => {
     });
 
     it('should set correct download attributes', () => {
-      const linkElement = {
-        href: '',
-        download: '',
-        style: {},
-        click: vi.fn(),
-        setAttribute: vi.fn(),
-      };
+      // Create a real anchor element and spy on its properties
+      const linkElement = document.createElement('a');
+      const clickSpy = vi.spyOn(linkElement, 'click');
 
-      vi.spyOn(document, 'createElement').mockReturnValue(linkElement as unknown as HTMLAnchorElement);
+      vi.spyOn(document, 'createElement').mockReturnValue(linkElement);
 
       downloadFile('content', 'my-file.json', 'application/json');
 
       expect(linkElement.download).toBe('my-file.json');
       expect(linkElement.href).toBe('blob:mock-url');
+      expect(clickSpy).toHaveBeenCalled();
     });
 
     it('should use default MIME type', () => {

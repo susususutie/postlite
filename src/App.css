@@ -38,6 +38,11 @@ body {
   background: #fff !important;
 }
 
+/* Icon mode: hide overflowX for sider children */
+.ant-layout-sider-collapsed .ant-layout-sider-children {
+  overflow-x: hidden;
+}
+
 .ant-tree-treenode {
   padding: 4px 0 !important;
 }

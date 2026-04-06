@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
 import { vi, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -42,18 +43,24 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+class ResizeObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 
 // Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+class IntersectionObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+  takeRecords = vi.fn(() => []);
+  root: Document | Element | null = null;
+  rootMargin: string = '';
+  thresholds: readonly number[] = [];
+}
+global.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -196,7 +203,6 @@ function createMockIDBObjectStore(storeName: string, indexes: Record<string, str
 }
 
 const mockIndexedDB = {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   open: vi.fn((_dbName: string, _version?: number) => {
     const stores: Record<string, ReturnType<typeof createMockIDBObjectStore>> = {
       collections: createMockIDBObjectStore('collections'),
@@ -211,7 +217,6 @@ const mockIndexedDB = {
         }
         return stores[name];
       }),
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       transaction: vi.fn((_storeNames: string | string[], _mode?: IDBTransactionMode) => {
         return {
           objectStore: (name: string) => stores[name] || createMockIDBObjectStore(name),
@@ -246,7 +251,6 @@ const mockIndexedDB = {
 
     return req;
   }),
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   deleteDatabase: vi.fn((_dbName: string) => {
     const req = createMockIDBRequest(undefined);
     setTimeout(() => req.onsuccess?.(), 0);
@@ -257,7 +261,7 @@ const mockIndexedDB = {
 
 (global as { indexedDB: typeof indexedDB }).indexedDB = mockIndexedDB as unknown as typeof indexedDB;
 
-// Mock storageBridge for all tests - provides a minimal mock that tests can override
+// Mock storageBridge for all tests
 const mockCollections: Map<string, ReturnType<typeof createCollectionWithRoot>> = new Map();
 const mockItems: Map<string, unknown> = new Map();
 
@@ -282,7 +286,6 @@ function createCollectionWithRoot(id: string, name: string, description: string 
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function findFolderInCollection(collection: ReturnType<typeof createCollectionWithRoot>, folderId: string): { parent: { folders: unknown[] }; folder: unknown } | null {
   function search(folders: unknown[], parent: { folders: unknown[] }): { parent: { folders: unknown[] }; folder: unknown } | null {
     for (const folder of folders as { id: string; folders: unknown[] }[]) {
@@ -398,10 +401,8 @@ const mockCollectionServiceMinimal = {
     if (!collection) {
       return Promise.resolve(null);
     }
-    // Rebuild folder structure from items
     const items = Array.from(mockItems.values()) as { id: string; type: string; name: string; collectionId: string; parentId: string | null; data: unknown; createdAt: number; updatedAt: number }[];
     const collectionItems = items.filter(item => item.collectionId === id);
-    // Deep clone folders from original collection
     const folderMap = new Map<string, { id: string; name: string; description?: string; folders: unknown[]; requests: unknown[]; createdAt: number; updatedAt: number }>();
     
     type FolderType = { id: string; name: string; description?: string; folders: unknown[]; requests: unknown[]; createdAt: number; updatedAt: number };
@@ -458,7 +459,6 @@ const mockCollectionServiceMinimal = {
         allRequests.push(request);
       }
     }
-    // Also update collection.requests for backward compatibility
     const result: Record<string, unknown> = { 
       ...collection, 
       folders: allFolders, 
@@ -512,6 +512,7 @@ vi.mock('../services/storageBridge', () => ({
 
 // Clean up after each test
 afterEach(() => {
+  cleanup();
   vi.clearAllMocks();
   localStorageMock.clear();
   // Reset IndexedDB stores
