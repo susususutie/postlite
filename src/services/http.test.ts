@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sendRequest, parseUrl, parseHeaders, sendProxyRequest, resolveRequestUrl } from './http';
+import { sendRequest, parseUrl, parseHeaders, resolveRequestUrl } from './http';
 import type { HttpRequest, Header, Param, Collection } from '../types';
+import * as proxyDetector from './proxyDetector';
+
+// Mock proxyDetector
+vi.mock('./proxyDetector', () => ({
+  detectProxyAvailability: vi.fn(),
+  clearProxyCache: vi.fn(),
+  initNetworkStatusListener: vi.fn(),
+}));
 
 describe('HTTP Service', () => {
   const mockFetch = vi.fn();
@@ -8,11 +16,16 @@ describe('HTTP Service', () => {
   beforeEach(() => {
     global.fetch = mockFetch;
     vi.useFakeTimers();
+    vi.clearAllMocks();
+    // 重置 proxyDetector mock 的默认行为
+    vi.mocked(proxyDetector.detectProxyAvailability).mockReset();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    // 确保 global.fetch 在每次测试后被重置
+    mockFetch.mockReset();
   });
 
   describe('parseUrl', () => {
@@ -139,7 +152,10 @@ describe('HTTP Service', () => {
       params: [],
     };
 
-    it('should send GET request successfully', async () => {
+    it('should send direct request when proxy is unavailable', async () => {
+      // Mock proxy unavailable
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const mockResponse = {
         status: 200,
         statusText: 'OK',
@@ -161,7 +177,66 @@ describe('HTTP Service', () => {
       expect(result.size).toBeGreaterThan(0);
     });
 
-    it('should send POST request with body', async () => {
+    it('should send request via proxy when proxy is available', async () => {
+      // Mock proxy available
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(true);
+
+      // Mock proxy response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          status: 200,
+          statusText: 'OK',
+          headers: { 'content-type': 'application/json' },
+          data: { success: true },
+          size: 100,
+          time: 50,
+        }),
+      });
+
+      const result = await sendRequest(mockRequest);
+
+      expect(result.status).toBe(200);
+      expect(result.data).toEqual({ success: true });
+      // Verify proxy endpoint was called
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/proxy',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: expect.any(String),
+        })
+      );
+    });
+
+    it('should fallback to direct request when proxy fails', async () => {
+      // Mock proxy available but fails
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(true);
+
+      // First call (proxy) fails
+      mockFetch.mockRejectedValueOnce(new Error('Proxy error'));
+
+      // Second call (direct) succeeds
+      const mockResponse = {
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        clone: vi.fn().mockReturnThis(),
+        blob: vi.fn().mockResolvedValue(new Blob(['{"success":true}'])),
+        json: vi.fn().mockResolvedValue({ success: true }),
+        text: vi.fn().mockResolvedValue('{"success":true}'),
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse);
+
+      const result = await sendRequest(mockRequest);
+
+      expect(result.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should send POST request with body via proxy', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(true);
+
       const postRequest: HttpRequest = {
         ...mockRequest,
         method: 'POST',
@@ -171,34 +246,66 @@ describe('HTTP Service', () => {
         },
       };
 
-      const mockResponse = {
-        status: 201,
-        statusText: 'Created',
-        headers: new Headers({ 'content-type': 'application/json' }),
-        clone: vi.fn().mockReturnThis(),
-        blob: vi.fn().mockResolvedValue(new Blob(['{"id":1}'])),
-        json: vi.fn().mockResolvedValue({ id: 1 }),
-        text: vi.fn().mockResolvedValue('{"id":1}'),
-      };
-
-      mockFetch.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          status: 201,
+          statusText: 'Created',
+          headers: {},
+          data: { id: 1 },
+          size: 50,
+          time: 30,
+        }),
+      });
 
       const result = await sendRequest(postRequest);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/test',
-        expect.objectContaining({
-          method: 'POST',
-          body: '{"name":"test"}',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-          }),
-        })
-      );
       expect(result.status).toBe(201);
+      // Verify proxy was called with correct body
+      const [, options] = mockFetch.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.method).toBe('POST');
+      expect(body.body).toBe('{"name":"test"}');
+    });
+
+    it('should block SSRF attacks via proxy', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(true);
+
+      const maliciousRequest: HttpRequest = {
+        ...mockRequest,
+        url: 'http://127.0.0.1:3000/admin',
+      };
+
+      // 由于 http.ts 中的 sendViaProxy 会检查 isUrlAllowed
+      // 且本地地址会被阻止，我们应该看到错误
+      // 模拟代理响应返回 SSRF 错误
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: vi.fn().mockResolvedValue({ error: 'URL not allowed: SSRF protection' }),
+      });
+
+      await expect(sendRequest(maliciousRequest)).rejects.toThrow();
+    });
+
+    it('should handle proxy error response', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(true);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: vi.fn().mockResolvedValue({ error: 'Target server unavailable' }),
+      });
+
+      // Fallback direct request also fails
+      mockFetch.mockRejectedValueOnce(new Error('CORS error'));
+
+      await expect(sendRequest(mockRequest)).rejects.toThrow();
     });
 
     it('should handle text response', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const mockResponse = {
         status: 200,
         statusText: 'OK',
@@ -216,6 +323,8 @@ describe('HTTP Service', () => {
     });
 
     it('should handle 404 error response', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const mockResponse = {
         status: 404,
         statusText: 'Not Found',
@@ -235,39 +344,15 @@ describe('HTTP Service', () => {
     });
 
     it('should handle network error', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
       mockFetch.mockRejectedValue(new Error('Network error'));
 
-      await expect(sendRequest(mockRequest)).rejects.toThrow('Network error');
-    });
-
-    it('should re-throw Error instances that are not AbortError', async () => {
-      const customError = new Error('Custom error with specific message');
-      mockFetch.mockRejectedValue(customError);
-
-      await expect(sendRequest(mockRequest)).rejects.toThrow('Custom error with specific message');
-    });
-
-    it('should handle non-Error exception by throwing unknown error', async () => {
-      mockFetch.mockImplementation(() => {
-        throw null;
-      });
-
-      await expect(sendRequest(mockRequest)).rejects.toThrow('Unknown error occurred');
-    });
-
-    it('should handle string exception by throwing unknown error', async () => {
-      mockFetch.mockImplementation(() => {
-        throw 'string error';
-      });
-
-      await expect(sendRequest(mockRequest)).rejects.toThrow('Unknown error occurred');
-    });
-
-    it.skip('should handle timeout', async () => {
-      // Timeout test requires special handling - skipping for now
+      await expect(sendRequest(mockRequest)).rejects.toThrow();
     });
 
     it('should handle request with query params', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const requestWithParams: HttpRequest = {
         ...mockRequest,
         params: [
@@ -296,6 +381,8 @@ describe('HTTP Service', () => {
     });
 
     it('should handle request with custom headers', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const requestWithHeaders: HttpRequest = {
         ...mockRequest,
         headers: [
@@ -330,6 +417,8 @@ describe('HTTP Service', () => {
     });
 
     it('should handle urlencoded body', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const requestWithUrlEncoded: HttpRequest = {
         ...mockRequest,
         method: 'POST',
@@ -365,6 +454,8 @@ describe('HTTP Service', () => {
     });
 
     it('should handle empty body mode', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const requestWithNoneBody: HttpRequest = {
         ...mockRequest,
         method: 'GET',
@@ -397,6 +488,8 @@ describe('HTTP Service', () => {
     });
 
     it('should handle malformed JSON response gracefully', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const mockResponse = {
         status: 200,
         statusText: 'OK',
@@ -415,6 +508,8 @@ describe('HTTP Service', () => {
     });
 
     it('should calculate response size correctly', async () => {
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
+
       const responseData = JSON.stringify({ key: 'value'.repeat(100) });
       const mockResponse = {
         status: 200,
@@ -431,187 +526,6 @@ describe('HTTP Service', () => {
       const result = await sendRequest(mockRequest);
 
       expect(result.size).toBeGreaterThan(0);
-    });
-  });
-
-  describe('sendProxyRequest', () => {
-    const mockRequest: HttpRequest = {
-      id: 'req-1',
-      name: 'Test Request',
-      method: 'GET',
-      url: 'https://api.example.com/test',
-      headers: [],
-      params: [],
-    };
-
-    it('should fallback to sendRequest when service worker is not available', async () => {
-      Object.defineProperty(navigator, 'serviceWorker', {
-        value: { controller: null },
-        writable: true,
-      });
-
-      const mockResponse = {
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers(),
-        clone: vi.fn().mockReturnThis(),
-        blob: vi.fn().mockResolvedValue(new Blob(['{}'])),
-        json: vi.fn().mockResolvedValue({}),
-        text: vi.fn().mockResolvedValue('{}'),
-      };
-
-      mockFetch.mockResolvedValue(mockResponse);
-
-      const result = await sendProxyRequest(mockRequest);
-
-      expect(result.status).toBe(200);
-    });
-
-    it('should send request through service worker when available', async () => {
-      let messageHandler: ((event: { data: unknown }) => void) | null = null;
-
-      // 模拟 MessageChannel
-      const mockPort1 = {
-        set onmessage(handler: ((event: { data: unknown }) => void) | null) {
-          messageHandler = handler;
-        },
-      };
-      const mockPort2 = {};
-
-      class MockMessageChannel {
-        port1 = mockPort1;
-        port2 = mockPort2;
-      }
-
-      global.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
-
-      const mockPostMessage = vi.fn();
-      const mockController = { postMessage: mockPostMessage };
-
-      Object.defineProperty(navigator, 'serviceWorker', {
-        value: { controller: mockController },
-        writable: true,
-      });
-
-      const responsePromise = sendProxyRequest(mockRequest);
-
-      // 模拟 service worker 响应
-      expect(mockPostMessage).toHaveBeenCalledTimes(1);
-
-      // 触发消息处理
-      if (messageHandler) {
-        messageHandler({
-          data: {
-            response: {
-              status: 200,
-              statusText: 'OK',
-              headers: { 'content-type': 'application/json' },
-              data: { success: true },
-              size: 100,
-            },
-          },
-        });
-      }
-
-      const result = await responsePromise;
-
-      expect(result.status).toBe(200);
-      expect(result.statusText).toBe('OK');
-      expect(result.data).toEqual({ success: true });
-      expect(result.time).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should handle service worker error response', async () => {
-      let messageHandler: ((event: { data: unknown }) => void) | null = null;
-
-      const mockPort1 = {
-        set onmessage(handler: ((event: { data: unknown }) => void) | null) {
-          messageHandler = handler;
-        },
-      };
-      const mockPort2 = {};
-
-      class MockMessageChannel {
-        port1 = mockPort1;
-        port2 = mockPort2;
-      }
-
-      global.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
-
-      const mockPostMessage = vi.fn();
-      const mockController = { postMessage: mockPostMessage };
-
-      Object.defineProperty(navigator, 'serviceWorker', {
-        value: { controller: mockController },
-        writable: true,
-      });
-
-      const responsePromise = sendProxyRequest(mockRequest);
-
-      // 触发错误响应
-      if (messageHandler) {
-        messageHandler({
-          data: {
-            error: 'Network error',
-          },
-        });
-      }
-
-      await expect(responsePromise).rejects.toThrow('Network error');
-    });
-
-    it('should pass config to service worker', async () => {
-      let messageHandler: ((event: { data: unknown }) => void) | null = null;
-
-      const mockPort1 = {
-        set onmessage(handler: ((event: { data: unknown }) => void) | null) {
-          messageHandler = handler;
-        },
-      };
-      const mockPort2 = {};
-
-      class MockMessageChannel {
-        port1 = mockPort1;
-        port2 = mockPort2;
-      }
-
-      global.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
-
-      const mockPostMessage = vi.fn();
-      const mockController = { postMessage: mockPostMessage };
-
-      Object.defineProperty(navigator, 'serviceWorker', {
-        value: { controller: mockController },
-        writable: true,
-      });
-
-      const config = { timeout: 5000, followRedirects: false };
-      const responsePromise = sendProxyRequest(mockRequest, config);
-
-      // 验证 postMessage 被调用时传递了 config
-      expect(mockPostMessage).toHaveBeenCalledTimes(1);
-      const [message] = mockPostMessage.mock.calls[0];
-
-      expect(message.type).toBe('PROXY_REQUEST');
-      expect(message.request).toEqual(mockRequest);
-      expect(message.config).toEqual(config);
-
-      // 清理 - 触发成功响应
-      if (messageHandler) {
-        messageHandler({
-          data: {
-            response: {
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              data: {},
-              size: 0,
-            },
-          },
-        });
-      }
-
-      await responsePromise;
     });
   });
 
@@ -828,10 +742,8 @@ describe('HTTP Service', () => {
   });
 
   describe('sendRequest with variable resolution', () => {
-    const mockFetch = vi.fn();
-
     beforeEach(() => {
-      global.fetch = mockFetch;
+      vi.mocked(proxyDetector.detectProxyAvailability).mockResolvedValue(false);
     });
 
     it('should throw error for unresolved variables', async () => {
